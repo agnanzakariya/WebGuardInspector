@@ -156,7 +156,7 @@ public static class PresentationTests
             findings,
             new AiAnalystViewModel(new WebGuard.AI.PlannedAiSecurityAnalyst(), new WebGuard.AI.PlannedMcpServerHost()),
             new SecondBrainViewModel(new WebGuard.Persistence.PlannedSecondBrainRepository()),
-            new IntelligenceViewModel(new WebGuard.Intelligence.PlannedVulnerabilityIntelligence(), new WebGuard.Intelligence.PlannedMalwareHashIntelligence()),
+            new IntelligenceViewModel(new WebGuard.Intelligence.PlannedVulnerabilityIntelligence(), [new WebGuard.Intelligence.PlannedMalwareHashIntelligence()]),
             historyVm,
             new SettingsViewModel(settings, theme, catalog),
             catalog, settings, theme);

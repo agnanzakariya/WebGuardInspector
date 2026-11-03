@@ -2,7 +2,7 @@
 
 Aplikasi desktop Windows (WPF, .NET 10) untuk inspeksi keamanan source code secara lokal.
 v0.3 menyelesaikan **Phase 2**: setelah inventory + SHA-256, aplikasi menjalankan engine deteksi
-(Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup threat intelligence (OSV.dev, CISA KEV, MalwareBazaar),
+(Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup threat intelligence (OSV.dev, CISA KEV, MalwareBazaar, ThreatFox),
 lalu menampilkan hasilnya di halaman Findings.
 
 > **Catatan:** engine adalah tool CLI eksternal yang harus di-install sendiri (lihat *Engine Phase 2*).
@@ -31,7 +31,8 @@ lalu menampilkan hasilnya di halaman Findings.
 | Rule bawaan `rules\semgrep` dan `rules\yara`; rule kustom lewat `EngineRulePaths` di settings.json | Implemented (Phase 2) |
 | Finding di luar inventory (folder dikecualikan, path keluar root) dibuang; dedupe per fingerprint | Implemented (Phase 2) |
 | Findings: evidence ter-redaksi, CWE/CVE/GHSA, remediasi, status per engine | Implemented (Phase 2) |
-| OSV.dev package lookup + flag CISA KEV, MalwareBazaar hash lookup, cache lokal `intel-cache` | Implemented (Phase 2, opt-in) |
+| OSV.dev package lookup, MalwareBazaar + ThreatFox hash lookup, cache lokal `intel-cache` | Implemented (Phase 2, opt-in) |
+| CISA KEV: finding dependency yang CVE-nya dieksploitasi aktif ditandai **KEV** dan dinaikkan ke Critical | Implemented (Phase 2, opt-in) |
 | `IAiSecurityAnalyst`, `IMcpServerHost`, `McpToolCatalog` (9 tools) | Interface (Phase 3) |
 | `ISecondBrainRepository`, `ITextEmbeddingService` | Interface (Phase 4) |
 | Model `SecurityFinding`, `FindingFingerprint`, `SecretRedactor`, `ValidationStatus` | Implemented |
@@ -51,7 +52,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 39 tests
+.\build.ps1          # restore + build + 42 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -63,7 +64,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 39 tests
+PASS: 42 tests
 PASS: build and tests completed
 ```
 
@@ -113,7 +114,8 @@ Install engine yang diinginkan; aplikasi mendeteksi .exe otomatis dari PATH, Win
 | Gitleaks | `winget install Gitleaks.Gitleaks` | `gitleaks dir` (≥ 8.19) atau `detect --no-git` untuk versi lama |
 | OSV-Scanner | `winget install Google.OSVScanner` | Mengirim nama/versi package ke OSV.dev, jadi hanya aktif bila *external lookups* diizinkan |
 | YARA-X | `winget install VirusTotal.YARA-X` | Rule bawaan di `rules\yara` (web shell, loader obfuscated, downloader) |
-| MalwareBazaar | Auth-Key gratis dari auth.abuse.ch | Hanya SHA-256 file executable/arsip/script, maks. 200 per scan |
+| MalwareBazaar + ThreatFox | Auth-Key gratis dari auth.abuse.ch (satu key untuk keduanya) | Hanya SHA-256 file executable/arsip/script, maks. 200 per scan |
+| CISA KEV | Tidak perlu install | Katalog publik diunduh (tanpa data proyek), cache 24 jam; menandai finding OSV-Scanner |
 
 Setiap engine berjalan berurutan setelah hashing dengan timeout 10 menit. Engine yang gagal dicatat di ringkasan
 (halaman Findings dan laporan JSON) tanpa membatalkan scan.
@@ -130,10 +132,11 @@ Setiap engine berjalan berurutan setelah hashing dengan timeout 10 menit. Engine
 **0.3.0** — Phase 2
 - Adapter Semgrep, Gitleaks, OSV-Scanner, YARA-X di atas `ExternalToolEngine` + `ExternalProcessRunner`.
 - `LocalFolderScanner` menjalankan engine (fase *Analyzing*), memfilter finding di luar inventory, dedupe per fingerprint.
-- Intelligence: OSV.dev + CISA KEV, MalwareBazaar, `FileIntelligenceCache`; semua opt-in.
+- Intelligence: OSV.dev, MalwareBazaar + ThreatFox, `FileIntelligenceCache`; semua opt-in.
+- `IFindingEnricher` + `KnownExploitedEnricher`: CVE di katalog CISA KEV ditandai KEV dan dinaikkan ke Critical setelah engine selesai.
 - UI: path engine dan Auth-Key di Settings, lookup package di Intelligence, detail finding (evidence, referensi, remediasi).
-- 39 tests (parser, orkestrasi, process runner, privasi intelligence).
-- Diuji dengan tool asli: Semgrep 1.183, Gitleaks 8.30, OSV-Scanner 2.7, YARA-X 1.22 (rule ID Semgrep tanpa path instalasi, retry saat file terkunci, redaksi parsial Gitleaks).
+- 42 tests (parser, orkestrasi, process runner, privasi intelligence, enricher KEV, ThreatFox).
+- Diuji dengan tool asli: Semgrep 1.183, Gitleaks 8.30, OSV-Scanner 2.7, YARA-X 1.22 (rule ID Semgrep tanpa path instalasi, retry saat file terkunci, redaksi parsial Gitleaks); KEV diuji live: Log4Shell CVE-2021-44228 ditandai.
 
 **0.2.0**
 - Desain baru: sidebar 8 halaman, alur Select Folder → Scan → Investigate, stat cards, inventory + detail panel, dark/light theme.

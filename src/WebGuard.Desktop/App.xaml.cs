@@ -4,6 +4,8 @@ using System.Net.Http;
 using WebGuard.AI;
 using WebGuard.Core;
 using WebGuard.Core.Detection;
+using WebGuard.Core.Findings;
+using WebGuard.Core.Intelligence;
 using WebGuard.Desktop.Services;
 using WebGuard.Detection;
 using WebGuard.Intelligence;
@@ -48,18 +50,24 @@ public partial class App : Application
         http.DefaultRequestHeaders.UserAgent.ParseAdd($"WebGuardInspector/{AppInfo.Version}");
         var cache = new FileIntelligenceCache(FileIntelligenceCache.DefaultDirectory);
         IntelligenceSettings Intelligence() => new(settings.Current.AllowExternalIntelligence, settings.Current.AbuseChAuthKey);
-        var vulnerabilities = new OsvVulnerabilityIntelligence(http, cache, Intelligence);
-        var malware = new MalwareBazaarHashIntelligence(http, cache, Intelligence);
+        var kev = new CisaKevCatalog(http, cache);
+        var vulnerabilities = new OsvVulnerabilityIntelligence(http, cache, Intelligence, kev: kev);
+        IMalwareHashIntelligence[] malware =
+        [
+            new MalwareBazaarHashIntelligence(http, cache, Intelligence),
+            new ThreatFoxHashIntelligence(http, cache, Intelligence),
+        ];
 
         IReadOnlyList<ISecurityEngine> engines =
         [
             .. SecurityEngineCatalog.CreateDefault(new ExternalProcessRunner(), id => settings.Current.ToolOptions(id)),
             new MalwareHashLookupEngine(malware),
         ];
+        IFindingEnricher[] enrichers = [new KnownExploitedEnricher(kev, Intelligence)];
         var history = new InMemoryScanHistoryStore();
 
         var workspace = new ScanWorkspaceViewModel(
-            new LocalFolderScanner(engines),
+            new LocalFolderScanner(engines, enrichers),
             new JsonReportExporter(),
             history,
             settings,

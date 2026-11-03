@@ -87,8 +87,9 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         settingsPage.Saved += async (_, _) =>
         {
             scanner.RefreshPolicy();
-            await Engines.RefreshAsync().ConfigureAwait(true);
+            // Intelligence statuses are instant; engine statuses run a version probe per CLI tool, so they go last.
             await intelligence.RefreshAsync().ConfigureAwait(true);
+            await Engines.RefreshAsync().ConfigureAwait(true);
         };
         settings.Changed += (_, _) => OnPropertyChanged(nameof(IsDarkTheme));
     }

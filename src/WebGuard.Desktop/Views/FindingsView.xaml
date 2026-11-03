@@ -124,7 +124,20 @@
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
             <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="1.4*" ElementStyle="{StaticResource Cell.Code}"/>
-            <DataGridTextColumn Header="Issue" Binding="{Binding Title}" Width="1.4*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTemplateColumn Header="Issue" Width="1.4*" SortMemberPath="Title">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <DockPanel VerticalAlignment="Center">
+                    <Border DockPanel.Dock="Left" Background="{DynamicResource Brush.DangerSoft}" CornerRadius="{StaticResource Radius.Pill}"
+                            Padding="6,0" Margin="0,0,6,0" VerticalAlignment="Center" ToolTip="CISA Known Exploited Vulnerability"
+                            Visibility="{Binding IsKnownExploited, Converter={StaticResource BoolToVisibility}}">
+                      <TextBlock Text="KEV" Foreground="{DynamicResource Brush.Danger}" FontSize="11" FontWeight="SemiBold"/>
+                    </Border>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource Cell.Text}"/>
+                  </DockPanel>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
             <DataGridTextColumn Header="Engine" Binding="{Binding Engine}" Width="0.8*" ElementStyle="{StaticResource Cell.Secondary}"/>
             <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="0.8*" ElementStyle="{StaticResource Cell.Secondary}"/>
           </DataGrid.Columns>
@@ -151,14 +164,18 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding HasSelectedFinding, Converter={StaticResource BoolToVisibility}}">
         <StackPanel DataContext="{Binding SelectedFinding}">
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <Border Style="{StaticResource Pill.Severity}">
+          <WrapPanel Margin="0,0,0,10">
+            <Border Style="{StaticResource Pill.Severity}" Margin="0,0,0,4">
               <TextBlock Text="{Binding SeverityText}" Foreground="White" FontWeight="SemiBold" FontSize="12"/>
             </Border>
-            <TextBlock Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Margin="10,0,0,0">
+            <Border Background="{DynamicResource Brush.DangerSoft}" CornerRadius="{StaticResource Radius.Pill}" Padding="8,1" Margin="8,0,0,4"
+                    VerticalAlignment="Center" Visibility="{Binding IsKnownExploited, Converter={StaticResource BoolToVisibility}}">
+              <TextBlock Text="Known exploited" Foreground="{DynamicResource Brush.Danger}" FontSize="12" FontWeight="SemiBold"/>
+            </Border>
+            <TextBlock Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Margin="10,0,0,4">
               <Run Text="{Binding CategoryText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding ConfidenceText, Mode=OneWay}"/>
             </TextBlock>
-          </StackPanel>
+          </WrapPanel>
           <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextWrapping="Wrap" TextTrimming="None"/>
           <TextBlock Text="{Binding Location}" Style="{StaticResource Text.Code}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,4,0,2" TextWrapping="Wrap"/>
           <TextBlock Style="{StaticResource Text.Caption}" Margin="0,0,0,12" TextWrapping="Wrap">

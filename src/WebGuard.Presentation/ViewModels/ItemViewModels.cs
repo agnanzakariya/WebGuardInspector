@@ -75,6 +75,9 @@ public sealed class FindingItemViewModel(SecurityFinding finding)
     };
     public string ConfidenceText => Finding.Confidence + " confidence";
     public bool IsAiHypothesis => Finding.Origin == FindingOrigin.AiHypothesis;
+
+    /// <summary>Set by the CISA KEV enricher: the CVE is exploited in the wild.</summary>
+    public bool IsKnownExploited => Finding.Evidence.Any(e => e.Kind == "known-exploited");
     public string? Remediation => Finding.Remediation;
     public bool HasRemediation => !string.IsNullOrWhiteSpace(Finding.Remediation);
     public IReadOnlyList<Evidence> Evidence => Finding.Evidence;

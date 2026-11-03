@@ -3,6 +3,7 @@ using WebGuard.Core.Findings;
 using WebGuard.Core.Intelligence;
 using WebGuard.Core.Scanning;
 using WebGuard.Intelligence;
+using WebGuard.Scanner;
 
 namespace WebGuard.Tests;
 
@@ -37,7 +38,7 @@ public static class IntelligenceTests
     public static async Task Osv_lookup_sends_only_coordinates_flags_kev_and_caches()
     {
         using var temp = new TempFolder();
-        var handler = new FakeHttpHandler(r => r.RequestUri == OsvVulnerabilityIntelligence.KevEndpoint ? KevResponse : OsvResponse);
+        var handler = new FakeHttpHandler(r => r.RequestUri == CisaKevCatalog.Endpoint ? KevResponse : OsvResponse);
         using var http = new HttpClient(handler);
         var allowed = true;
         var osv = new OsvVulnerabilityIntelligence(http, new FileIntelligenceCache(temp.Path), () => new IntelligenceSettings(allowed, null));
@@ -97,30 +98,131 @@ public static class IntelligenceTests
             new FileInventoryItem("README.md", ".md", 10, Now, new string('d', 64), FileScanStatus.Hashed, 1, null),
             new FileInventoryItem("big.zip", ".zip", 10, Now, null, FileScanStatus.SkippedSize, 0, null),
         };
-        var intel = new FakeMalwareIntelligence(bad);
-        var engine = new MalwareHashLookupEngine(intel);
+        var bazaar = new FakeMalwareIntelligence("bazaar", bad);
+        var threatFox = new FakeMalwareIntelligence("threatfox", bad, family: null);
+        var offline = new FakeMalwareIntelligence("offline", bad, ready: false);
+        var engine = new MalwareHashLookupEngine([bazaar, threatFox, offline]);
         var result = await engine.ScanAsync(new EngineScanRequest(Guid.NewGuid(), Path.GetTempPath(), files, Path.GetTempPath(), TimeSpan.FromSeconds(10)),
             null, CancellationToken.None);
 
         Assert.True(result.Succeeded, "succeeded");
-        Assert.Equal(2, intel.Looked.Count, "exe and js looked up; md and unhashed skipped");
+        Assert.Equal(2, bazaar.Looked.Count, "exe and js looked up; md and unhashed skipped");
+        Assert.Equal(2, threatFox.Looked.Count, "every ready source is queried");
+        Assert.Equal(0, offline.Looked.Count, "a source that is not ready is never queried");
         var f = result.Findings.Single();
         Assert.Equal(Severity.Critical, f.Severity, "critical");
         Assert.Equal(FindingCategory.Malware, f.Category, "malware");
         Assert.Equal(@"bin\drop.exe", f.Location.RelativePath, "location");
+        Assert.Equal("Known malware: TestFamily", f.Title, "family from the source that has one");
+        Assert.Equal("bazaar|threatfox", string.Join('|', f.Evidence.Select(e => e.Source)), "one finding, evidence per source");
+        Assert.True(f.Description.Contains("bazaar and threatfox", StringComparison.Ordinal), "both sources named");
     }
 
-    private sealed class FakeMalwareIntelligence(string maliciousHash) : IMalwareHashIntelligence
+    [Test]
+    public static async Task ThreatFox_sends_only_the_hash_and_parses_verdicts()
     {
-        public List<string> Looked { get; } = [];
-        public IntelligenceSourceInfo Source { get; } = new("fake", "Fake", "test", "Phase 2", false);
+        using var temp = new TempFolder();
+        var hash = new string('e', 64);
+        var handler = new FakeHttpHandler(_ => """{"query_status":"ok","data":[{"ioc":"x","malware":"win.agent_tesla","malware_printable":"Agent Tesla"}]}""");
+        using var http = new HttpClient(handler);
+        var tf = new ThreatFoxHashIntelligence(http, new FileIntelligenceCache(temp.Path), () => new IntelligenceSettings(true, "key-1"));
+
+        var verdict = await tf.LookupAsync(hash, CancellationToken.None);
+        Assert.True(verdict!.IsKnownMalicious, "malicious");
+        Assert.Equal("Agent Tesla", verdict.Family, "printable family");
+        var sent = handler.Requests.Single();
+        Assert.Equal(ThreatFoxHashIntelligence.Endpoint, sent.Uri, "endpoint");
+        Assert.Equal("""{"query":"search_hash","hash":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}""", sent.Body, "only the hash is sent");
+        Assert.Equal("key-1", sent.AuthKey, "auth header");
+        await tf.LookupAsync(hash, CancellationToken.None);
+        Assert.Equal(1, handler.Requests.Count, "second lookup served from cache");
+
+        Assert.True(!ThreatFoxHashIntelligence.Parse(hash, """{"query_status":"no_result","data":"Your search did not yield any results"}""", Now).IsKnownMalicious, "clean");
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            Task.FromResult(ThreatFoxHashIntelligence.Parse(hash, """{"query_status":"unknown_auth_key"}""", Now)));
+        var off = new ThreatFoxHashIntelligence(http, new FileIntelligenceCache(temp.Path), () => IntelligenceSettings.Offline);
+        Assert.Equal(EngineAvailability.Disabled, (await off.GetStatusAsync(CancellationToken.None)).Availability, "consent required");
+    }
+
+    [Test]
+    public static void Kev_marks_exploited_cves_critical_and_keeps_fingerprint()
+    {
+        var finding = DependencyFinding("GHSA-aaaa", "CVE-2021-44228");
+        var marked = KnownExploitedEnricher.Mark(finding, new HashSet<string>(["cve-2021-44228"], StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(Severity.Critical, marked.Severity, "raised to critical");
+        Assert.Equal(finding.Fingerprint, marked.Fingerprint, "identity unchanged");
+        Assert.Equal("CVE-2021-44228", marked.Evidence.Single(e => e.Kind == KnownExploitedEnricher.EvidenceKind).RedactedSnippet, "KEV evidence");
+        Assert.True(marked.Description.Contains("Original severity: High", StringComparison.Ordinal), "original severity kept");
+        Assert.True(ReferenceEquals(marked, KnownExploitedEnricher.Mark(marked, new HashSet<string>(["CVE-2021-44228"]))), "idempotent");
+        var other = DependencyFinding("GHSA-bbbb", "CVE-2020-0001");
+        Assert.True(ReferenceEquals(other, KnownExploitedEnricher.Mark(other, new HashSet<string>(["CVE-2021-44228"]))), "untouched when not listed");
+    }
+
+    [Test]
+    public static async Task Scanner_applies_kev_enricher_after_engines()
+    {
+        using var temp = new TempFolder();
+        temp.Write("package-lock.json", "{}");
+        temp.Write("app.js", "x");
+        var handler = new FakeHttpHandler(_ => KevResponse);
+        using var http = new HttpClient(handler);
+        var allowed = true;
+        var enricher = new KnownExploitedEnricher(new CisaKevCatalog(http, new FileIntelligenceCache(Path.Combine(temp.Path, "cache"))),
+            () => new IntelligenceSettings(allowed, null));
+        var engine = new FixedEngine([DependencyFinding("GHSA-jf85-cpcp-j695", "CVE-2019-10744"), DependencyFinding("GHSA-x", "CVE-2000-1")]);
+
+        var report = await new LocalFolderScanner([engine], [enricher]).ScanAsync(temp.Path, ScanOptions.Default, null, CancellationToken.None);
+        Assert.Equal(Severity.Critical, report.Findings[0].Severity, "KEV finding sorted first as critical");
+        Assert.Equal("GHSA-jf85-cpcp-j695", report.Findings[0].RuleId, "the listed CVE");
+        Assert.Equal(Severity.High, report.Findings[1].Severity, "unlisted unchanged");
+        var kev = report.Engines.Single(e => e.EngineId == CisaKevCatalog.SourceId);
+        Assert.Equal("Completed", kev.Outcome, "enricher summary");
+        Assert.Equal(1, kev.FindingCount, "one flagged");
+
+        allowed = false;
+        var offline = await new LocalFolderScanner([engine], [enricher]).ScanAsync(temp.Path, ScanOptions.Default, null, CancellationToken.None);
+        Assert.Equal("Disabled", offline.Engines.Single(e => e.EngineId == CisaKevCatalog.SourceId).Outcome, "consent respected");
+        Assert.True(offline.Findings.All(f => f.Severity == Severity.High), "no enrichment without consent");
+
+        var rogue = await new LocalFolderScanner([engine], [new RogueEnricher()]).ScanAsync(temp.Path, ScanOptions.Default, null, CancellationToken.None);
+        Assert.Equal("Failed", rogue.Engines.Single(e => e.EngineId == "rogue").Outcome, "enricher may not change identities");
+        Assert.Equal(2, rogue.Findings.Count, "findings kept");
+    }
+
+    private static SecurityFinding DependencyFinding(string id, string cve) => new(
+        Guid.NewGuid(), FindingFingerprint.Compute("osv-scanner", id, "package-lock.json", "npm/lodash@4.17.11"), "osv-scanner", id,
+        "lodash 4.17.11: issue", "desc.", FindingCategory.VulnerableDependency, Severity.High, Confidence.High, FindingOrigin.Engine,
+        new SourceLocation("package-lock.json", 0, 0), [], [], [id, cve], "Upgrade.", ValidationStatus.New, Now);
+
+    private sealed class FixedEngine(IReadOnlyList<SecurityFinding> findings) : ISecurityEngine
+    {
+        public SecurityEngineInfo Info { get; } = new("fixed", "Fixed", EngineKind.DependencyAudit, "test", "Phase 2", null);
+        public Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new EngineStatus(EngineAvailability.Ready, "1", null, "ok"));
+        public Task<EngineScanResult> ScanAsync(EngineScanRequest request, IProgress<EngineProgress>? progress, CancellationToken cancellationToken) =>
+            Task.FromResult(new EngineScanResult("fixed", true, findings, TimeSpan.Zero, null, null));
+    }
+
+    private sealed class RogueEnricher : IFindingEnricher
+    {
+        public SecurityEngineInfo Info { get; } = new("rogue", "Rogue", EngineKind.DependencyAudit, "test", "Phase 2", null);
         public Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new EngineStatus(EngineAvailability.Ready, null, null, "ok"));
+        public Task<EnrichmentResult> EnrichAsync(IReadOnlyList<SecurityFinding> findings, CancellationToken cancellationToken) =>
+            Task.FromResult(new EnrichmentResult(findings.Select(f => f with { Fingerprint = "changed" }).ToArray(), findings.Count, "x"));
+    }
+
+    private sealed class FakeMalwareIntelligence(string id, string maliciousHash, bool ready = true, string? family = "TestFamily") : IMalwareHashIntelligence
+    {
+        public List<string> Looked { get; } = [];
+        public IntelligenceSourceInfo Source { get; } = new(id, id, "test", "Phase 2", false);
+        public Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new EngineStatus(ready ? EngineAvailability.Ready : EngineAvailability.Disabled, null, null, "ok"));
 
         public Task<MalwareHashVerdict?> LookupAsync(string sha256, CancellationToken cancellationToken)
         {
             lock (Looked) Looked.Add(sha256);
-            return Task.FromResult<MalwareHashVerdict?>(new MalwareHashVerdict(sha256, sha256 == maliciousHash, "TestFamily", "fake", Now));
+            return Task.FromResult<MalwareHashVerdict?>(new MalwareHashVerdict(sha256, sha256 == maliciousHash, family, id, Now));
         }
     }
 }

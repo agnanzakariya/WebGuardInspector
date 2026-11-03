@@ -16,11 +16,16 @@ public sealed class LocalFolderScanner : ILocalScanner
 {
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(60);
     private readonly ISecurityEngine[] _engines;
+    private readonly IFindingEnricher[] _enrichers;
     private readonly TimeProvider _time;
 
-    public LocalFolderScanner(IEnumerable<ISecurityEngine>? engines = null, TimeProvider? timeProvider = null)
+    public LocalFolderScanner(
+        IEnumerable<ISecurityEngine>? engines = null,
+        IEnumerable<IFindingEnricher>? enrichers = null,
+        TimeProvider? timeProvider = null)
     {
         _engines = engines?.ToArray() ?? [];
+        _enrichers = enrichers?.ToArray() ?? [];
         _time = timeProvider ?? TimeProvider.System;
     }
 
@@ -170,14 +175,54 @@ public sealed class LocalFolderScanner : ILocalScanner
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
 
-        var merged = findings
+        IReadOnlyList<SecurityFinding> merged = findings
             .GroupBy(f => f.Fingerprint, StringComparer.Ordinal)
             .Select(g => g.First())
+            .ToArray();
+        merged = await EnrichAsync(merged, summaries, cancellationToken).ConfigureAwait(false);
+
+        var ordered = merged
             .OrderByDescending(f => f.Severity)
             .ThenBy(f => f.Location.RelativePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.Location.StartLine)
             .ToArray();
-        return (summaries, merged);
+        return (summaries, ordered);
+    }
+
+    /// <summary>Applies each Ready enricher in turn; like engines, a failing enricher is recorded and skipped.</summary>
+    private async Task<IReadOnlyList<SecurityFinding>> EnrichAsync(
+        IReadOnlyList<SecurityFinding> findings,
+        List<EngineRunSummary> summaries,
+        CancellationToken cancellationToken)
+    {
+        foreach (var enricher in _enrichers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = await enricher.GetStatusAsync(cancellationToken).ConfigureAwait(false);
+            if (status.Availability != EngineAvailability.Ready)
+            {
+                summaries.Add(new EngineRunSummary(enricher.Info.Id, enricher.Info.DisplayName, status.Availability.ToString(),
+                    status.Version, 0, status.Message));
+                continue;
+            }
+
+            try
+            {
+                var result = await enricher.EnrichAsync(findings, cancellationToken).ConfigureAwait(false);
+                // An enricher may annotate findings but never add, drop or re-identify them.
+                if (result.Findings.Count != findings.Count ||
+                    !result.Findings.Select(f => f.Fingerprint).SequenceEqual(findings.Select(f => f.Fingerprint), StringComparer.Ordinal))
+                    throw new InvalidOperationException("Enricher changed the set of findings.");
+                findings = result.Findings;
+                summaries.Add(new EngineRunSummary(enricher.Info.Id, enricher.Info.DisplayName, "Completed", status.Version,
+                    result.ChangedCount, result.Message));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                summaries.Add(new EngineRunSummary(enricher.Info.Id, enricher.Info.DisplayName, "Failed", status.Version, 0, ex.Message));
+            }
+        }
+        return findings;
     }
 
     private static string NormalizePath(string path) => path.Replace('\\', '/').Trim('/');

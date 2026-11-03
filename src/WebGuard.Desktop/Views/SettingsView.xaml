@@ -52,8 +52,8 @@
             <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AllowExternalIntelligence, Mode=TwoWay}"
                       Content="Allow external threat-intelligence lookups"/>
             <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="50,6,0,0"
-                       Text="When enabled, only package names/versions (OSV-Scanner, OSV.dev) and SHA-256 hashes (MalwareBazaar) are sent. The public CISA KEV catalog is downloaded. Source code and credentials never leave this machine."/>
-            <TextBlock Text="abuse.ch Auth-Key (MalwareBazaar hash lookups, optional)" Style="{StaticResource Text.Secondary}" Margin="0,14,0,6"/>
+                       Text="When enabled, only package names/versions (OSV-Scanner, OSV.dev) and SHA-256 hashes (MalwareBazaar, ThreatFox) are sent. The public CISA KEV catalog is downloaded. Source code and credentials never leave this machine."/>
+            <TextBlock Text="abuse.ch Auth-Key (MalwareBazaar and ThreatFox hash lookups, optional)" Style="{StaticResource Text.Secondary}" Margin="0,14,0,6"/>
             <TextBox Text="{Binding AbuseChAuthKey, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
                      Tag="Paste the free key from auth.abuse.ch" AutomationProperties.Name="abuse.ch Auth-Key"/>
             <TextBlock Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextWrapping="Wrap"

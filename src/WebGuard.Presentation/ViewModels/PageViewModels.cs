@@ -264,21 +264,17 @@ public sealed class SecondBrainViewModel : PageViewModel
 public sealed class IntelligenceViewModel : PageViewModel
 {
     private readonly IVulnerabilityIntelligence _vulnerabilities;
-    private readonly IMalwareHashIntelligence _malware;
+    private readonly IMalwareHashIntelligence[] _malware;
     private string _ecosystem = "npm";
     private string _packageName = string.Empty;
     private string _packageVersion = string.Empty;
     private string _lookupMessage = string.Empty;
 
-    public IntelligenceViewModel(IVulnerabilityIntelligence vulnerabilities, IMalwareHashIntelligence malware)
+    public IntelligenceViewModel(IVulnerabilityIntelligence vulnerabilities, IEnumerable<IMalwareHashIntelligence> malware)
     {
         _vulnerabilities = vulnerabilities;
-        _malware = malware;
-        Sources =
-        [
-            Create(vulnerabilities.Source),
-            Create(malware.Source),
-        ];
+        _malware = malware.ToArray();
+        Sources = [Create(vulnerabilities.Source), .. _malware.Select(m => Create(m.Source))];
         LookupCommand = new AsyncRelayCommand(LookupAsync,
             () => PackageName.Trim().Length > 0 && PackageVersion.Trim().Length > 0,
             ex => LookupMessage = "Lookup failed: " + ex.Message);
@@ -321,7 +317,8 @@ public sealed class IntelligenceViewModel : PageViewModel
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         Sources[0].Apply(await _vulnerabilities.GetStatusAsync(cancellationToken).ConfigureAwait(true));
-        Sources[1].Apply(await _malware.GetStatusAsync(cancellationToken).ConfigureAwait(true));
+        for (var i = 0; i < _malware.Length; i++)
+            Sources[i + 1].Apply(await _malware[i].GetStatusAsync(cancellationToken).ConfigureAwait(true));
     }
 
     internal async Task LookupAsync()

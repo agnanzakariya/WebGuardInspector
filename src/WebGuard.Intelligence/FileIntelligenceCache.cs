@@ -33,7 +33,8 @@ public sealed class FileIntelligenceCache(string directory, TimeProvider? timePr
                 return entry.Value;
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        // NotSupported/InvalidOperation: serialization unavailable for T (e.g. trimmed or AOT builds). Treat as a miss.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException or InvalidOperationException)
         {
             return null;
         }
@@ -41,11 +42,11 @@ public sealed class FileIntelligenceCache(string directory, TimeProvider? timePr
 
     public async Task SetAsync<T>(string key, T value, string sourceId, CancellationToken cancellationToken) where T : class
     {
-        System.IO.Directory.CreateDirectory(Directory);
         var path = PathFor(key);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
+            System.IO.Directory.CreateDirectory(Directory);
             var stream = File.Create(temp);
             await using (stream.ConfigureAwait(false))
             {
@@ -54,9 +55,9 @@ public sealed class FileIntelligenceCache(string directory, TimeProvider? timePr
             }
             File.Move(temp, path, overwrite: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
         {
-            // A cache write failure must never fail a scan.
+            // A cache write failure must never fail a lookup or a scan.
             try { File.Delete(temp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
