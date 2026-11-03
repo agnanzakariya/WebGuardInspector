@@ -204,9 +204,8 @@ public sealed class McpToolViewModel(McpToolDescriptor tool)
         _ => "Writes knowledge",
     };
     public bool RequiresHumanApproval => tool.RequiresHumanApproval;
-    public bool NeedsSecondBrain => McpToolCatalog.SecondBrainTools.Contains(tool.Name);
-    public string Availability => NeedsSecondBrain ? "Phase 4" : RequiresHumanApproval ? "Needs --allow" : "Always on";
-    public StatusTone Tone => NeedsSecondBrain ? StatusTone.Info : tool.Access == McpToolAccess.ReadOnly ? StatusTone.Success : StatusTone.Warning;
+    public string Availability => RequiresHumanApproval ? "Needs --allow" : "Always on";
+    public StatusTone Tone => tool.Access == McpToolAccess.ReadOnly ? StatusTone.Success : StatusTone.Warning;
 }
 
 /// <summary>An AI explanation of one finding. Always shown as an unverified hypothesis.</summary>

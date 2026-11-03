@@ -80,6 +80,12 @@ public static class TestRunner
                 var inner = ex is TargetInvocationException { InnerException: { } innerEx } ? innerEx : ex;
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"  FAIL  {name}: {inner.GetType().Name}: {inner.Message}");
+                if (inner is not AssertionException)
+                {
+                    // Where an unexpected exception came from (first frames inside WebGuard code).
+                    foreach (var frame in (inner.StackTrace ?? string.Empty).Split('\n').Where(l => l.Contains("WebGuard", StringComparison.Ordinal)).Take(3))
+                        Console.WriteLine("        " + frame.Trim());
+                }
                 Console.ResetColor();
             }
         }

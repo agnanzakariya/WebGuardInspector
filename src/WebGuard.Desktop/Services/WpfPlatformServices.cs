@@ -35,6 +35,26 @@ public sealed class SaveFileDialogService : ISaveFileDialogService
     }
 }
 
+/// <summary>Opens links such as obsidian://open?path=… with the app registered for the scheme.</summary>
+public sealed class ExternalLauncher(IDialogService dialogs) : IExternalLauncher
+{
+    private static readonly string[] AllowedSchemes = ["obsidian", "https"];
+
+    public void Open(Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!AllowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true })?.Dispose();
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            dialogs.ShowError("Could not open the link", ex.Message + (uri.Scheme == "obsidian" ? " Is Obsidian installed?" : string.Empty));
+        }
+    }
+}
+
 public sealed class ClipboardService : IClipboardService
 {
     public void SetText(string text)

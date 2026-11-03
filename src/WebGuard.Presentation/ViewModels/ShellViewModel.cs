@@ -67,7 +67,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             new(PageKey.LocalScanner, "Local Scanner", ""),
             new(PageKey.Findings, "Findings", ""),
             new(PageKey.AiAnalyst, "AI Analyst", ""),
-            new(PageKey.SecondBrain, "Second Brain", "", "Phase 4"),
+            new(PageKey.SecondBrain, "Second Brain", ""),
             new(PageKey.Intelligence, "Intelligence", ""),
             new(PageKey.ScanHistory, "Scan History", ""),
             new(PageKey.Settings, "Settings", ""),
@@ -90,6 +90,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             // Intelligence statuses are instant; engine statuses run a version probe per CLI tool, so they go last.
             await intelligence.RefreshAsync().ConfigureAwait(true);
             await ai.RefreshAsync().ConfigureAwait(true);
+            await secondBrain.RefreshAsync().ConfigureAwait(true);
             await Engines.RefreshAsync().ConfigureAwait(true);
         };
         settings.Changed += (_, _) => OnPropertyChanged(nameof(IsDarkTheme));
@@ -150,6 +151,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         findings.Load(report);
         NavItems.First(n => n.Key == PageKey.Findings).Badge = report.Findings.Count;
         await history.RefreshAsync().ConfigureAwait(true);
+        await Page<SecondBrainViewModel>().RefreshAsync().ConfigureAwait(true);
     }
 
     private void ToggleTheme()

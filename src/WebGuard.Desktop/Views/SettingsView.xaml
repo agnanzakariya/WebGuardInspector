@@ -62,6 +62,25 @@
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
           <StackPanel>
+            <TextBlock Text="SECOND BRAIN (OBSIDIAN)" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
+            <TextBlock Text="Obsidian vault folder" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <TextBox Text="{Binding VaultPath, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
+                       Tag="e.g. D:\2nd Brain\WebGuard" AutomationProperties.Name="Second Brain vault folder"/>
+              <Button Grid.Column="1" Style="{StaticResource Button.Secondary}" Content="Browse" Command="{Binding BrowseVaultCommand}" Margin="8,0,0,0" Padding="12,5"/>
+            </Grid>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AutoRecord, Mode=TwoWay}" Margin="0,12,0,0"
+                      Content="Record every scan and AI analysis automatically"/>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                       Text="Notes are plain Markdown with properties and links (Projects, Scans, Findings, Rules, Dashboard). Secrets are redacted before writing; your own text in a note is never overwritten. Leave empty to turn the Second Brain off."/>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+          <StackPanel>
             <TextBlock Text="PRIVACY" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
             <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AllowExternalIntelligence, Mode=TwoWay}"
                       Content="Allow external threat-intelligence lookups"/>

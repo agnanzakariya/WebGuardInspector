@@ -69,6 +69,22 @@ public sealed class OpenAiCompatibleClient(HttpClient http)
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
     }
 
+    /// <summary>Embeddings for <paramref name="inputs"/> (POST /embeddings), in input order.</summary>
+    public async Task<IReadOnlyList<float[]>> EmbedAsync(Uri endpoint, string model, IReadOnlyList<string> inputs, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        using var response = await http.PostAsJsonAsync(Combine(endpoint, "embeddings"), new EmbeddingRequest(model, inputs), cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Embedding server returned {(int)response.StatusCode}: {Truncate(body, 300)}");
+        using var document = JsonDocument.Parse(body);
+        var vectors = document.RootElement.GetProperty("data").EnumerateArray()
+            .OrderBy(d => d.TryGetProperty("index", out var i) ? i.GetInt32() : 0)
+            .Select(d => d.GetProperty("embedding").EnumerateArray().Select(v => v.GetSingle()).ToArray())
+            .ToArray();
+        return vectors.Length == inputs.Count ? vectors : throw new HttpRequestException("Embedding server returned an unexpected number of vectors.");
+    }
+
     /// <summary>Embedding models are listed by the same endpoint but cannot chat.</summary>
     public static bool IsChatModel(string id) =>
         !id.Contains("embed", StringComparison.OrdinalIgnoreCase) && !id.Contains("rerank", StringComparison.OrdinalIgnoreCase);
@@ -76,6 +92,10 @@ public sealed class OpenAiCompatibleClient(HttpClient http)
     private static Uri Combine(Uri endpoint, string path) => new(endpoint.AbsoluteUri.TrimEnd('/') + "/" + path);
 
     private static string Truncate(string text, int max) => text.Length <= max ? text : text[..max] + "…";
+
+    private sealed record EmbeddingRequest(
+        [property: JsonPropertyName("model")] string Model,
+        [property: JsonPropertyName("input")] IReadOnlyList<string> Input);
 
     private sealed record ChatRequest(
         [property: JsonPropertyName("model")] string Model,

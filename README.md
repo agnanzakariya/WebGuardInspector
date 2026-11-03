@@ -1,14 +1,15 @@
-# WebGuard Inspector v0.4.0 — Local Source Security Workspace
+# WebGuard Inspector v0.5.0 — Local Source Security Workspace
 
 Aplikasi desktop Windows (WPF, .NET 10) untuk inspeksi keamanan source code secara lokal.
 Setelah inventory + SHA-256, aplikasi menjalankan engine deteksi (Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup
 threat intelligence (OSV.dev, CISA KEV, MalwareBazaar, ThreatFox), lalu menampilkan hasilnya di halaman Findings (Phase 2).
-v0.4 menambahkan **Phase 3**: AI Analyst dengan model lokal yang menjelaskan finding, dan server **MCP** lokal agar agen AI
-(Claude Code, LM Studio, Cursor, …) bisa memakai tool WebGuard secara terbatas.
+Phase 3 menambahkan AI Analyst dengan model lokal dan server **MCP** lokal untuk agen AI (Claude Code, LM Studio, Cursor, …).
+v0.5 menambahkan **Phase 4 — Second Brain**: setiap scan (termasuk yang aman), temuan, analisis AI dan keputusan validasi
+dicatat sebagai catatan Markdown yang saling terhubung di vault **Obsidian**.
 
 > **Catatan:** engine adalah tool CLI eksternal yang harus di-install sendiri (lihat *Engine Phase 2*).
 > Engine yang tidak ter-install dilaporkan sebagai *Not installed* dan scan tetap berjalan.
-> AI Analyst butuh server model lokal (LM Studio/Ollama) — lihat *AI Analyst dan MCP*. Second Brain (Phase 4) masih berupa interface.
+> AI Analyst butuh server model lokal (LM Studio/Ollama) — lihat *AI Analyst dan MCP*. Second Brain butuh vault Obsidian — lihat *Second Brain (Phase 4)*.
 
 ## Fitur
 
@@ -37,8 +38,11 @@ v0.4 menambahkan **Phase 3**: AI Analyst dengan model lokal yang menjelaskan fin
 | AI Analyst lokal (OpenAI-compatible: LM Studio, Ollama, llama.cpp): ringkasan, alasan risiko, usulan perbaikan per finding | Implemented (Phase 3) |
 | Konteks AI: cuplikan kode bernomor baris, secret diredaksi (`SourceRedactor`), hanya endpoint localhost | Implemented (Phase 3) |
 | Server MCP stdio `WebGuard.Mcp.exe`: 7 tool, scope satu folder, tool berisiko hanya dengan `--allow`, audit log | Implemented (Phase 3) |
-| Tool MCP `search_similar_findings`, `save_security_finding` | Phase 4 (Second Brain) |
-| `ISecondBrainRepository`, `ITextEmbeddingService` | Interface (Phase 4) |
+| Second Brain di vault Obsidian: Dashboard, Projects, Scans (termasuk scan aman), Findings, Rules | Implemented (Phase 4) |
+| Validasi temuan (Confirmed, FalsePositive, AcceptedRisk, Fixed, …) di aplikasi atau properti `status` di Obsidian; dipakai lagi di scan berikutnya | Implemented (Phase 4) |
+| Temuan yang hilang di scan berikutnya ditandai `present: false` ("likely fixed"); muncul lagi = regresi | Implemented (Phase 4) |
+| Pencarian kata kunci + semantik (embedding lokal nomic-embed via LM Studio) | Implemented (Phase 4) |
+| Tool MCP `search_similar_findings`, `save_security_finding` | Implemented (Phase 4) |
 | Model `SecurityFinding`, `FindingFingerprint`, `SecretRedactor`, `ValidationStatus` | Implemented |
 
 ## Persyaratan
@@ -56,7 +60,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 53 tests
+.\build.ps1          # restore + build + 59 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -68,7 +72,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 53 tests
+PASS: 59 tests
 PASS: build and tests completed
 ```
 
@@ -95,13 +99,13 @@ src/
   WebGuard.Scanner       LocalFolderScanner, JsonReportExporter, InMemoryScanHistoryStore
   WebGuard.Detection     SemgrepEngine, GitleaksEngine, OsvScannerEngine, YaraXEngine + rule bawaan
   WebGuard.Intelligence  OSV.dev, CISA KEV, MalwareBazaar, ThreatFox, cache intelligence
-  WebGuard.AI            LocalAiSecurityAnalyst, OpenAiCompatibleClient, StdioMcpServerHost
+  WebGuard.AI            LocalAiSecurityAnalyst, LocalEmbeddingService, OpenAiCompatibleClient, StdioMcpServerHost
   WebGuard.Mcp           Server MCP stdio (WebGuard.Mcp.exe): McpServer, McpToolset, McpAuditLog
-  WebGuard.Persistence   PlannedSecondBrainRepository (stub)
+  WebGuard.Persistence   ObsidianSecondBrain (vault Markdown), MarkdownNote
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (53 tests)
+  WebGuard.Tests         Test runner tanpa dependency (59 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -157,10 +161,31 @@ Halaman **AI Analyst** membuat konfigurasi `mcpServers` dan perintah `claude mcp
 | `list_project_files`, `read_source_context`, `get_dependency_manifest`, `propose_remediation` | Read-only (konten diredaksi) | Aktif |
 | `run_security_rules` | Menjalankan engine yang di-allow-list | Hanya dengan `--allow` |
 | `lookup_vulnerability`, `lookup_malware_hash` | Lookup jaringan (juga butuh izin di Settings) | Hanya dengan `--allow` |
-| `search_similar_findings`, `save_security_finding` | Second Brain | Phase 4 |
+| `search_similar_findings` | Read-only: cari di Second Brain | Aktif (butuh vault) |
+| `save_security_finding` | Menulis temuan sebagai hipotesis (`NeedsReview`) | Hanya dengan `--allow` |
 
 Semua path dibatasi ke `--root` (`..`, path absolut lain, dan symlink/junction ditolak). Setiap panggilan — termasuk
 yang ditolak — dicatat di `%LOCALAPPDATA%\WebGuardInspector\mcp-audit.jsonl`.
+
+## Second Brain (Phase 4)
+
+Atur folder vault di **Settings → Second Brain (Obsidian)** (mis. `D:\2nd Brain\WebGuard`) lalu buka folder itu di Obsidian
+(*Open folder as vault*). Dengan pencatatan otomatis aktif, setiap scan dan analisis AI langsung dicatat:
+
+```text
+Dashboard.md                       ringkasan: proyek, temuan Critical/High yang masih terbuka, scan terbaru
+Projects/<proyek>.md               riwayat scan proyek + temuan saat ini
+Scans/<tanggal jam> <proyek>.md    satu scan: engine, hasil (clean / findings / not-analyzed), inventaris
+Findings/<judul> (<id>).md         satu temuan unik (fingerprint): bukti teredaksi, kemunculan, analisis AI, riwayat validasi
+Rules/<engine> — <rule>.md         semua temuan sebuah aturan + catatan tim tentang cara memperbaikinya
+```
+
+- Catatan memakai *properties* (severity, status, CWE, present, first/last seen, tags) dan wiki link, jadi bisa dipakai
+  di Search, Graph view, Bases/Dataview Obsidian.
+- WebGuard hanya menulis properti miliknya dan blok `<!-- webguard:... -->`; teks Anda (bagian **My notes** dan di luar
+  blok) serta properti tambahan Anda tidak pernah ditimpa. Properti `status` hanya diubah oleh keputusan validasi.
+- Scan tanpa engine yang berjalan dicatat sebagai `not-analyzed`, bukan "aman".
+- Secret selalu diredaksi sebelum ditulis; embedding untuk pencarian disimpan di `.webguard/` (diabaikan Obsidian).
 
 ## Prinsip keamanan
 
@@ -171,6 +196,12 @@ yang ditolak — dicatat di `%LOCALAPPDATA%\WebGuardInspector\mcp-audit.jsonl`.
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.5.0** — Phase 4 (Second Brain)
+- `ObsidianSecondBrain`: catatan Markdown di vault Obsidian untuk setiap scan (termasuk yang aman), temuan, proyek, aturan, dashboard.
+- Validasi dua arah (aplikasi ↔ properti `status` Obsidian) dan diterapkan ke scan berikutnya; temuan yang hilang ditandai `present: false`.
+- Analisis AI tersimpan sebagai hipotesis; tombol *Open in Obsidian*; halaman Second Brain dengan pencarian kata kunci + semantik.
+- Tool MCP `search_similar_findings` dan `save_security_finding`. 59 tests; diuji live di vault pengguna.
 
 **0.4.0** — Phase 3
 - `LocalAiSecurityAnalyst` + `OpenAiCompatibleClient` (LM Studio/Ollama/llama.cpp, hanya localhost), tombol *Analyze with AI* di Findings.

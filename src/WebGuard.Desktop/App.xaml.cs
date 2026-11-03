@@ -71,6 +71,11 @@ public partial class App : Application
         var analyst = new LocalAiSecurityAnalyst(new OpenAiCompatibleClient(aiHttp), Ai);
         var mcp = new StdioMcpServerHost(StdioMcpServerHost.BundledExecutablePath);
         var clipboard = new ClipboardService();
+        var dialogs = new DialogService();
+        var launcher = new ExternalLauncher(dialogs);
+        var folderPicker = new FolderPicker();
+        var secondBrain = new ObsidianSecondBrain(() => new SecondBrainSettings(settings.Current.SecondBrainVaultPath),
+            new LocalEmbeddingService(new OpenAiCompatibleClient(aiHttp), Ai));
         var history = new InMemoryScanHistoryStore();
 
         var workspace = new ScanWorkspaceViewModel(
@@ -78,13 +83,14 @@ public partial class App : Application
             new JsonReportExporter(),
             history,
             settings,
-            new FolderPicker(),
+            folderPicker,
             new SaveFileDialogService(),
             clipboard,
-            new DialogService());
+            dialogs,
+            secondBrain);
 
         var catalog = new EngineCatalogViewModel(engines);
-        var findings = new FindingsViewModel(catalog, analyst);
+        var findings = new FindingsViewModel(catalog, analyst, secondBrain, settings, launcher);
 
         return new ShellViewModel(
             workspace,
@@ -92,10 +98,10 @@ public partial class App : Application
             new LocalScannerViewModel(workspace, settings),
             findings,
             new AiAnalystViewModel(analyst, mcp, workspace, clipboard),
-            new SecondBrainViewModel(new PlannedSecondBrainRepository()),
+            new SecondBrainViewModel(secondBrain, launcher),
             new IntelligenceViewModel(vulnerabilities, malware),
             new ScanHistoryViewModel(history),
-            new SettingsViewModel(settings, theme, catalog),
+            new SettingsViewModel(settings, theme, catalog, folderPicker),
             catalog,
             settings,
             theme);

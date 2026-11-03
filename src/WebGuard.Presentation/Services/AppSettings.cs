@@ -39,6 +39,12 @@ public sealed record AppSettings
 
     public const string DefaultAiEndpoint = "http://127.0.0.1:1234/v1";
 
+    /// <summary>Obsidian vault used as the Second Brain; empty disables recording.</summary>
+    public string? SecondBrainVaultPath { get; init; }
+
+    /// <summary>Record every scan and AI analysis automatically.</summary>
+    public bool SecondBrainAutoRecord { get; init; } = true;
+
     /// <summary>Engines that send data off the machine and therefore also require <see cref="AllowExternalIntelligence"/>.</summary>
     public static IReadOnlyCollection<string> NetworkEngines { get; } = ["osv-scanner"];
 

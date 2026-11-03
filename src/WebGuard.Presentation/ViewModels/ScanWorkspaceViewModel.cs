@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Input;
+using WebGuard.Core.Knowledge;
 using WebGuard.Core.Reporting;
 using WebGuard.Core.Scanning;
 using WebGuard.Presentation.Formatting;
@@ -26,6 +27,7 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
     private readonly ISaveFileDialogService _saveDialog;
     private readonly IClipboardService _clipboard;
     private readonly IDialogService _dialogs;
+    private readonly ISecondBrainRepository? _secondBrain;
     private readonly List<FileItemViewModel> _allFiles = [];
     private CancellationTokenSource? _cts;
     private ScanReport? _report;
@@ -52,8 +54,10 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
         IFolderPicker folderPicker,
         ISaveFileDialogService saveDialog,
         IClipboardService clipboard,
-        IDialogService dialogs)
+        IDialogService dialogs,
+        ISecondBrainRepository? secondBrain = null)
     {
+        _secondBrain = secondBrain;
         _scanner = scanner;
         _exporter = exporter;
         _history = history;
@@ -217,6 +221,9 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
             });
 
             var report = await _scanner.ScanAsync(folder, _settings.Current.ToScanOptions(), progress, _cts.Token).ConfigureAwait(true);
+            ProgressText = "Recording in the Second Brain…";
+            var (remembered, brainNote) = await RememberAsync(report).ConfigureAwait(true);
+            report = remembered;
             var previous = (await _history.GetRecentAsync(50).ConfigureAwait(true))
                 .FirstOrDefault(r => string.Equals(r.RootFolder, report.RootFolder, StringComparison.OrdinalIgnoreCase));
             await _history.AddAsync(report).ConfigureAwait(true);
@@ -225,6 +232,7 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
                             $"{DisplayFormat.Count(report.Statistics.HashedCount)} hashed, {DisplayFormat.Count(report.Statistics.ErrorCount)} errors, " +
                             $"{DisplayFormat.Count(report.Findings.Count)} findings from {report.Engines.Count(e => e.Outcome == "Completed")} engine(s) " +
                             $"in {DisplayFormat.Duration(report.Duration)}.";
+            if (brainNote is not null) StatusMessage += " " + brainNote;
             ScanCompleted?.Invoke(this, report);
         }
         catch (OperationCanceledException)
@@ -242,6 +250,35 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
             _cts?.Dispose();
             _cts = null;
             IsScanning = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies verdicts already recorded in the Second Brain (a finding marked FalsePositive stays so) and records the scan,
+    /// clean or not. A Second Brain problem never fails the scan; it is reported in the status line instead.
+    /// </summary>
+    private async Task<(ScanReport Report, string? Note)> RememberAsync(ScanReport report)
+    {
+        if (_secondBrain is null) return (report, null);
+        try
+        {
+            if ((await _secondBrain.GetStatusAsync(CancellationToken.None).ConfigureAwait(true)).Availability != Core.Detection.EngineAvailability.Ready)
+                return (report, null);
+            var verdicts = await _secondBrain.GetValidationStatusesAsync(report.Findings.Select(f => f.Fingerprint), CancellationToken.None).ConfigureAwait(true);
+            if (verdicts.Count > 0)
+            {
+                report = report with
+                {
+                    Findings = report.Findings.Select(f => verdicts.TryGetValue(f.Fingerprint, out var s) ? f with { Status = s } : f).ToArray(),
+                };
+            }
+            if (!_settings.Current.SecondBrainAutoRecord) return (report, verdicts.Count > 0 ? $"{verdicts.Count} verdict(s) from the Second Brain applied." : null);
+            await _secondBrain.SaveScanAsync(report, CancellationToken.None).ConfigureAwait(true);
+            return (report, "Recorded in the Second Brain.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return (report, "Second Brain not updated: " + ex.Message);
         }
     }
 

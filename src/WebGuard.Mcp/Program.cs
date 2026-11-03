@@ -5,6 +5,7 @@ using WebGuard.Core.Scanning;
 using WebGuard.Detection;
 using WebGuard.Intelligence;
 using WebGuard.Mcp;
+using WebGuard.Persistence;
 using WebGuard.Presentation.Services;
 using WebGuard.Scanner;
 
@@ -65,7 +66,9 @@ var services = new McpServices(
     [new KnownExploitedEnricher(kev, Intelligence)],
     new OsvVulnerabilityIntelligence(http, cache, Intelligence, kev: kev),
     [new MalwareBazaarHashIntelligence(http, cache, Intelligence), new ThreatFoxHashIntelligence(http, cache, Intelligence)],
-    new LocalAiSecurityAnalyst(new OpenAiCompatibleClient(aiHttp), Ai));
+    new LocalAiSecurityAnalyst(new OpenAiCompatibleClient(aiHttp), Ai),
+    new ObsidianSecondBrain(() => new SecondBrainSettings(Settings().SecondBrainVaultPath),
+        new LocalEmbeddingService(new OpenAiCompatibleClient(aiHttp), Ai)));
 
 var toolset = new McpToolset(scope, services, new McpAuditLog(auditPath ?? McpAuditLog.DefaultPath), allowed);
 Console.Error.WriteLine($"webguard-mcp {AppInfo.Version}: root={scope.Root}; tools={string.Join(",", toolset.Enabled)}");

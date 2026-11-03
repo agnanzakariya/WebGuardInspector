@@ -228,7 +228,7 @@ public static class AiMcpTests
 
         var list = (await server.HandleAsync("""{"jsonrpc":"2.0","id":4,"method":"tools/list"}""", CancellationToken.None))!;
         var names = list["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.GetValue<string>()).ToArray();
-        Assert.Equal("list_project_files|read_source_context|get_dependency_manifest|propose_remediation", string.Join('|', names), "read-only tools only");
+        Assert.Equal("list_project_files|read_source_context|get_dependency_manifest|search_similar_findings|propose_remediation", string.Join('|', names), "read-only tools only");
         Assert.True(list["result"]!["tools"]![0]!["annotations"]!["readOnlyHint"]!.GetValue<bool>(), "annotated read-only");
 
         var read = await Call(server, "read_source_context", new JsonObject { ["path"] = "src/app.js", ["line"] = 1 });
@@ -266,12 +266,12 @@ public static class AiMcpTests
     {
         var host = new StdioMcpServerHost(@"C:\Program Files\WebGuard\WebGuard.Mcp.exe");
         var setup = host.GetClientSetup(@"D:\My Project", ["run_security_rules", "rm_rf", "save_security_finding"]);
-        Assert.Equal("--root|D:\\My Project|--allow|run_security_rules", string.Join('|', setup.Arguments), "root plus filtered approvals");
+        Assert.Equal("--root|D:\\My Project|--allow|run_security_rules,save_security_finding", string.Join('|', setup.Arguments), "root plus known approvals only");
         var config = JsonNode.Parse(setup.ConfigJson)!["mcpServers"]!["webguard"]!;
         Assert.Equal(@"C:\Program Files\WebGuard\WebGuard.Mcp.exe", config["command"]!.GetValue<string>(), "command");
         Assert.True(setup.ClaudeCodeCommand.StartsWith("claude mcp add webguard -- \"C:\\Program Files", StringComparison.Ordinal) &&
                     setup.ClaudeCodeCommand.Contains("\"D:\\My Project\"", StringComparison.Ordinal), "paths with spaces quoted");
-        Assert.Equal(3, McpToolCatalog.ApprovableTools.Count, "three gated tools can be pre-approved");
+        Assert.Equal(4, McpToolCatalog.ApprovableTools.Count, "four gated tools can be pre-approved");
     }
 
     // ---- Helpers ---------------------------------------------------------------------------------------------------
@@ -285,7 +285,8 @@ public static class AiMcpTests
             [],
             new WebGuard.Intelligence.PlannedVulnerabilityIntelligence(),
             [new CleanMalwareSource()],
-            new FakeAnalyst());
+            new FakeAnalyst(),
+            new WebGuard.Persistence.PlannedSecondBrainRepository());
         var toolset = new McpToolset(new ProjectScope(root), services, new McpAuditLog(auditPath), allowed);
         return (new McpServer(toolset), auditPath);
     }

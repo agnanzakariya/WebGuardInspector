@@ -22,6 +22,12 @@ public interface IDialogService
     void ShowInfo(string title, string message);
 }
 
+/// <summary>Opens a link (e.g. obsidian://open?path=…) with the app registered for it.</summary>
+public interface IExternalLauncher
+{
+    void Open(Uri uri);
+}
+
 public enum AppTheme { Dark, Light }
 
 public interface IThemeService

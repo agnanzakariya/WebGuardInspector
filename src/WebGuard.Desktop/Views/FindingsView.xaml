@@ -211,6 +211,30 @@
             <TextBlock Text="{Binding Remediation}" Style="{StaticResource Text.Wrap}"/>
           </Border>
 
+          <!-- Human verdict, stored in the finding's Second Brain note (page-level state). -->
+          <StackPanel DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,18,0,0"
+                      Visibility="{Binding HasSecondBrain, Converter={StaticResource BoolToVisibility}}">
+            <Grid>
+              <TextBlock Text="VALIDATION" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+              <Button Style="{StaticResource Button.Secondary}" Command="{Binding OpenNoteCommand}" Padding="10,4" HorizontalAlignment="Right"
+                      ToolTip="Open this finding's note in Obsidian">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE8A7;" Style="{StaticResource Text.Icon}" FontSize="12"/>
+                  <TextBlock Text="Open in Obsidian" Margin="6,0,0,0" FontSize="12"/>
+                </StackPanel>
+              </Button>
+            </Grid>
+            <ListBox Style="{StaticResource Segmented}" ItemsSource="{Binding Statuses}" SelectedItem="{Binding SelectedStatus, Mode=TwoWay}"
+                     HorizontalAlignment="Left" Margin="0,8,0,0" AutomationProperties.Name="Validation status">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel/>
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+            </ListBox>
+            <TextBlock Text="{Binding ValidationMessage}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+          </StackPanel>
+
           <!-- AI analysis of this finding (page-level state, so it uses the page's DataContext). -->
           <StackPanel DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,18,0,0"
                       Visibility="{Binding HasAnalyst, Converter={StaticResource BoolToVisibility}}">

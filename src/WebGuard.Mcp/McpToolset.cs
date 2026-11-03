@@ -6,6 +6,7 @@ using WebGuard.Core.AI;
 using WebGuard.Core.Detection;
 using WebGuard.Core.Findings;
 using WebGuard.Core.Intelligence;
+using WebGuard.Core.Knowledge;
 using WebGuard.Core.Scanning;
 using WebGuard.Presentation.Services;
 using WebGuard.Scanner;
@@ -19,7 +20,8 @@ public sealed record McpServices(
     IReadOnlyList<IFindingEnricher> Enrichers,
     IVulnerabilityIntelligence Vulnerabilities,
     IReadOnlyList<IMalwareHashIntelligence> MalwareSources,
-    IAiSecurityAnalyst Analyst);
+    IAiSecurityAnalyst Analyst,
+    ISecondBrainRepository SecondBrain);
 
 /// <summary>Raised by a tool for a user-facing error (bad argument, path outside the project, …).</summary>
 public sealed class McpToolException(string message) : Exception(message);
@@ -28,7 +30,7 @@ public sealed class McpToolException(string message) : Exception(message);
 /// The tools from <see cref="McpToolCatalog"/> that are implemented, scoped to one project folder.
 /// Read-only tools are always listed. Tools that run engines or send data off the machine are listed only when the
 /// person configuring the server approved them with <c>--allow</c>; their annotations also let MCP clients ask per call.
-/// Second Brain tools (search_similar_findings, save_security_finding) arrive in Phase 4 and are not listed.
+/// Second Brain tools work once a vault is configured in WebGuard's Settings.
 /// </summary>
 public sealed class McpToolset
 {
@@ -147,6 +149,19 @@ public sealed class McpToolset
         yield return new Tool(D("lookup_malware_hash"), "Look up malware hash",
             Schema(("sha256", "string", "SHA-256 of a file (64 hex characters)", true)),
             LookupMalwareHashAsync);
+        yield return new Tool(D("search_similar_findings"), "Search the Second Brain",
+            Schema(("query", "string", "What to look for, e.g. 'SQL injection in repositories' or a rule id", true),
+                   ("take", "integer", "Maximum results (default 10, at most 25)", false)),
+            SearchSimilarFindingsAsync);
+        yield return new Tool(D("save_security_finding"), "Save finding to the Second Brain",
+            Schema(("path", "string", "File path relative to the project root", true),
+                   ("line", "integer", "1-based line (0 when not line-specific)", false),
+                   ("title", "string", "Short title of the weakness", true),
+                   ("description", "string", "What is wrong and why it matters", true),
+                   ("severity", "string", "Critical, High, Medium, Low or Info", true),
+                   ("cwe", "string", "Optional CWE id, e.g. CWE-89", false),
+                   ("remediation", "string", "Optional suggested fix", false)),
+            SaveSecurityFindingAsync);
         yield return new Tool(D("propose_remediation"), "Propose remediation",
             Schema(("path", "string", "File path relative to the project root", true),
                    ("line", "integer", "1-based line of the issue", true),
@@ -291,6 +306,57 @@ public sealed class McpToolset
             analysis.ProposedRemediation,
             confidence = analysis.Confidence.ToString(),
         });
+    }
+
+    private async Task<string> SearchSimilarFindingsAsync(JsonObject args, CancellationToken cancellationToken)
+    {
+        await RequireSecondBrainAsync(cancellationToken).ConfigureAwait(false);
+        var hits = await _services.SecondBrain.SearchSimilarAsync(RequiredString(args, "query"), Math.Clamp(OptionalInt(args, "take") ?? 10, 1, 25), cancellationToken)
+            .ConfigureAwait(false);
+        return Serialize(new
+        {
+            results = hits.Select(h => new
+            {
+                h.Title,
+                severity = h.Severity.ToString(),
+                status = h.Status.ToString(),
+                h.IsVerified,
+                h.Project,
+                score = h.Similarity,
+                note = h.NotePath,
+                h.Snippet,
+            }),
+        });
+    }
+
+    /// <summary>Records a finding reported by the MCP client as an unverified hypothesis (status NeedsReview) for a person to validate.</summary>
+    private async Task<string> SaveSecurityFindingAsync(JsonObject args, CancellationToken cancellationToken)
+    {
+        await RequireSecondBrainAsync(cancellationToken).ConfigureAwait(false);
+        var path = RequiredString(args, "path");
+        Resolve(path);
+        var line = Math.Max(0, OptionalInt(args, "line") ?? 0);
+        var title = SourceRedactor.Redact(RequiredString(args, "title"));
+        if (!Enum.TryParse<Severity>(RequiredString(args, "severity"), ignoreCase: true, out var severity))
+            throw new McpToolException("Severity must be Critical, High, Medium, Low or Info.");
+        var cwe = OptionalString(args, "cwe") is { } c ? new[] { c.Trim().ToUpperInvariant() } : [];
+        var finding = new SecurityFinding(Guid.NewGuid(), FindingFingerprint.Compute("mcp-client", title, path, line.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            "mcp-client", "reported-issue", title, SourceRedactor.Redact(RequiredString(args, "description")), FindingCategory.SuspiciousPattern, severity,
+            Confidence.Low, FindingOrigin.AiHypothesis, new SourceLocation(path, line, line), [], cwe, [],
+            OptionalString(args, "remediation") is { } fix ? SourceRedactor.Redact(fix) : null, ValidationStatus.NeedsReview, DateTimeOffset.UtcNow);
+        await _services.SecondBrain.SaveFindingAsync(finding, Path.GetFileName(Scope.Root), cancellationToken).ConfigureAwait(false);
+        return Serialize(new
+        {
+            saved = true,
+            status = "NeedsReview — recorded as an AI hypothesis; a person must validate it in WebGuard or Obsidian.",
+            fingerprint = finding.Fingerprint,
+        });
+    }
+
+    private async Task RequireSecondBrainAsync(CancellationToken cancellationToken)
+    {
+        var status = await _services.SecondBrain.GetStatusAsync(cancellationToken).ConfigureAwait(false);
+        if (status.Availability != EngineAvailability.Ready) throw new McpToolException("Second Brain not available: " + status.Message);
     }
 
     private string Resolve(string path) =>

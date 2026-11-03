@@ -11,7 +11,7 @@
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="400"/>
+        <ColumnDefinition Width="420"/>
       </Grid.ColumnDefinitions>
       <StackPanel Margin="0,0,12,0">
         <Border Style="{StaticResource Card}">
@@ -22,7 +22,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
-              <TextBox Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" Tag="e.g. SQL injection in repositories we fixed before"
+              <TextBox Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" Tag="e.g. remote code execution through user input"
                        AutomationProperties.AutomationId="SearchBox" AutomationProperties.Name="Knowledge search">
                 <TextBox.InputBindings>
                   <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
@@ -30,7 +30,34 @@
               </TextBox>
               <Button Grid.Column="1" Style="{StaticResource Button.Primary}" Content="Search" Margin="10,0,0,0" Command="{Binding SearchCommand}"/>
             </Grid>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                       Text="Keyword search over every finding note (description, AI analyses, your notes), blended with semantic similarity from the local embedding model when LM Studio is running."/>
             <TextBlock Text="{Binding SearchResult}" Style="{StaticResource Text.Wrap}" Margin="0,10,0,0"/>
+            <ItemsControl ItemsSource="{Binding Results}" Margin="0,8,0,0" Visibility="{Binding HasResults, Converter={StaticResource BoolToVisibility}}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Inset}" Margin="0,0,0,8">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <Border Style="{StaticResource Pill.Severity}" VerticalAlignment="Top" Margin="0,2,12,0">
+                        <TextBlock Text="{Binding SeverityText}" Foreground="White" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                      </Border>
+                      <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Base}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Details}" Style="{StaticResource Text.Caption}"/>
+                        <TextBlock Text="{Binding Snippet}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,4,0,0"/>
+                      </StackPanel>
+                      <Button Grid.Column="2" Style="{StaticResource Button.Secondary}" Content="Open" Command="{Binding OpenCommand}"
+                              Padding="10,4" VerticalAlignment="Top" Margin="10,0,0,0" ToolTip="Open the note in Obsidian"/>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
@@ -54,26 +81,33 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <TextBlock Style="{StaticResource Text.Wrap}" Margin="0,8,0,0" FontSize="12"
-                       Text="AI output is stored as candidate knowledge until validated. False positives and verified remediations become reusable knowledge."/>
+                       Text="Every scan is recorded — clean scans too. Findings that disappear are marked 'not seen' so fixes and regressions stay visible. AI analyses are stored as unverified hypotheses; your verdicts (set here or as the status property in Obsidian) are reused on every later scan."/>
           </StackPanel>
         </Border>
       </StackPanel>
       <StackPanel Grid.Column="1">
         <Border Style="{StaticResource Card}">
           <StackPanel>
-            <TextBlock Text="STORAGE" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <TextBlock Text="VAULT" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
             <ContentControl Content="{Binding Status}" ContentTemplate="{StaticResource EngineStatusTemplate}" Focusable="False"/>
+            <TextBlock Text="{Binding StatsText}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0"/>
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+              <Button Style="{StaticResource Button.Primary}" Content="Open Dashboard" Command="{Binding OpenDashboardCommand}" Padding="12,5"/>
+              <Button Style="{StaticResource Button.Secondary}" Content="Open vault" Command="{Binding OpenVaultCommand}" Padding="12,5" Margin="8,0,0,0"/>
+            </StackPanel>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,8,0,0" TextWrapping="Wrap"
+                       Text="Vault folder and automatic recording are set in Settings → Second Brain."/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
           <StackPanel>
-            <TextBlock Text="ENTITIES" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <TextBlock Text="VAULT STRUCTURE" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
             <ItemsControl ItemsSource="{Binding Entities}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Margin="0,0,0,8">
-                    <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding Value}" Style="{StaticResource Text.Caption}"/>
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Code}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Value}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap"/>
                   </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

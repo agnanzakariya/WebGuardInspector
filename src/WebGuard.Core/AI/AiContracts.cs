@@ -46,12 +46,11 @@ public static class McpToolCatalog
         new("save_security_finding", "Persist a validated, deduplicated finding.", McpToolAccess.WritesKnowledge, true),
     ];
 
-    /// <summary>Tools that need the Second Brain (Phase 4); the server does not list them yet.</summary>
+    /// <summary>Tools that read or write the Second Brain vault; they report an error until a vault is configured.</summary>
     public static IReadOnlySet<string> SecondBrainTools { get; } = new HashSet<string>(StringComparer.Ordinal) { "search_similar_findings", "save_security_finding" };
 
     /// <summary>Approval-gated tools a person can pre-approve when registering the server with a client.</summary>
-    public static IReadOnlyList<string> ApprovableTools { get; } =
-        Tools.Where(t => t.RequiresHumanApproval && !SecondBrainTools.Contains(t.Name)).Select(t => t.Name).ToArray();
+    public static IReadOnlyList<string> ApprovableTools { get; } = Tools.Where(t => t.RequiresHumanApproval).Select(t => t.Name).ToArray();
 }
 
 /// <summary>How an MCP client launches the server for one project folder.</summary>

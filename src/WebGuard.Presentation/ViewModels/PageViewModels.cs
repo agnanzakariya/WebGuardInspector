@@ -60,21 +60,71 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
     private IReadOnlyList<SecurityFinding> _all = [];
     private ScanReport? _report;
     private readonly IAiSecurityAnalyst? _analyst;
+    private readonly ISecondBrainRepository? _secondBrain;
+    private readonly SettingsService? _settings;
+    private readonly IExternalLauncher? _launcher;
+    private string _validationMessage = string.Empty;
+    private bool _syncingStatus;
     private readonly Dictionary<Guid, AiAnalysisViewModel> _analyses = [];
     private CancellationTokenSource? _analysisCts;
     private bool _isAnalyzing;
     private string _analysisMessage = string.Empty;
 
-    public FindingsViewModel(EngineCatalogViewModel engines, IAiSecurityAnalyst? analyst = null)
+    public FindingsViewModel(EngineCatalogViewModel engines, IAiSecurityAnalyst? analyst = null, ISecondBrainRepository? secondBrain = null,
+        SettingsService? settings = null, IExternalLauncher? launcher = null)
     {
         EngineCatalog = engines;
         _analyst = analyst;
+        _secondBrain = secondBrain;
+        _settings = settings;
+        _launcher = launcher;
+        OpenNoteCommand = new RelayCommand(OpenNote, () => SelectedFinding is not null && _secondBrain?.GetFindingNoteUri(SelectedFinding.Finding.Fingerprint) is not null);
         AnalyzeCommand = new AsyncRelayCommand(AnalyzeSelectedAsync, () => _analyst is not null && SelectedFinding is not null && !IsAnalyzing,
             ex => AnalysisMessage = "AI analysis failed: " + ex.Message);
         CancelAnalysisCommand = new RelayCommand(() => _analysisCts?.Cancel(), () => IsAnalyzing);
     }
 
     public AsyncRelayCommand AnalyzeCommand { get; }
+    public ICommand OpenNoteCommand { get; }
+    public bool HasSecondBrain => _secondBrain is not null;
+    public string ValidationMessage { get => _validationMessage; private set => SetProperty(ref _validationMessage, value); }
+
+    /// <summary>Verdicts a person can give; stored in the finding's Second Brain note and reused on later scans.</summary>
+    public IReadOnlyList<ValidationStatus> Statuses { get; } = Enum.GetValues<ValidationStatus>();
+
+    public ValidationStatus? SelectedStatus
+    {
+        get => SelectedFinding?.Finding.Status;
+        set
+        {
+            if (_syncingStatus || value is not { } status || SelectedFinding is null || status == SelectedFinding.Finding.Status) return;
+            _ = SetStatusAsync(SelectedFinding.Finding, status);
+        }
+    }
+
+    /// <summary>Records a verdict in the Second Brain and shows it on the finding.</summary>
+    internal async Task SetStatusAsync(SecurityFinding finding, ValidationStatus status)
+    {
+        if (_secondBrain is null) return;
+        try
+        {
+            await _secondBrain.RecordValidationAsync(
+                new ValidationRecord(finding.Fingerprint, status, Environment.UserName, null, DateTimeOffset.UtcNow), CancellationToken.None).ConfigureAwait(true);
+            _all = _all.Select(f => f.Fingerprint == finding.Fingerprint ? f with { Status = status } : f).ToArray();
+            Rebuild(finding.Fingerprint);
+            ValidationMessage = $"Marked {status} in the Second Brain.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ValidationMessage = "Could not record the verdict: " + ex.Message;
+            OnPropertyChanged(nameof(SelectedStatus));
+        }
+    }
+
+    private void OpenNote()
+    {
+        if (SelectedFinding is not null && _secondBrain?.GetFindingNoteUri(SelectedFinding.Finding.Fingerprint) is { } uri) _launcher?.Open(uri);
+    }
     public ICommand CancelAnalysisCommand { get; }
     public bool HasAnalyst => _analyst is not null;
 
@@ -97,6 +147,21 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
 
     public bool HasCurrentAnalysis => CurrentAnalysis is not null;
 
+    private async Task<string> RememberAnalysisAsync(SecurityFinding finding, AiAnalysis analysis)
+    {
+        if (_secondBrain is null || _settings?.Current.SecondBrainAutoRecord != true) return string.Empty;
+        try
+        {
+            if ((await _secondBrain.GetStatusAsync(CancellationToken.None).ConfigureAwait(true)).Availability != EngineAvailability.Ready) return string.Empty;
+            await _secondBrain.SaveAnalysisAsync(finding, analysis, CancellationToken.None).ConfigureAwait(true);
+            return "Saved to the Second Brain.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return "Analysis not saved to the Second Brain: " + ex.Message;
+        }
+    }
+
     /// <summary>Cancels a running analysis (called when the main window closes).</summary>
     public void Dispose()
     {
@@ -117,7 +182,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
             var context = FindingContextBuilder.Build(new ProjectScope(_report.RootFolder), finding, _all);
             var analysis = await _analyst.AnalyzeAsync(context, _analysisCts.Token).ConfigureAwait(true);
             _analyses[finding.Id] = new AiAnalysisViewModel(analysis);
-            AnalysisMessage = string.Empty;
+            AnalysisMessage = await RememberAnalysisAsync(finding, analysis).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -159,6 +224,11 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         {
             if (!SetProperty(ref _selected, value)) return;
             OnPropertyChanged(nameof(HasSelectedFinding));
+            _syncingStatus = true;
+            OnPropertyChanged(nameof(SelectedStatus));
+            _syncingStatus = false;
+            ValidationMessage = string.Empty;
+            (OpenNoteCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
             OnPropertyChanged(nameof(CurrentAnalysis));
             OnPropertyChanged(nameof(HasCurrentAnalysis));
             if (!IsAnalyzing) AnalysisMessage = string.Empty;
@@ -200,8 +270,9 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         Rebuild();
     }
 
-    private void Rebuild()
+    private void Rebuild(string? keepFingerprint = null)
     {
+        keepFingerprint ??= SelectedFinding?.Finding.Fingerprint;
         Findings.Clear();
         var term = SearchText.Trim();
         foreach (var f in _all
@@ -215,7 +286,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         {
             Findings.Add(new FindingItemViewModel(f));
         }
-        SelectedFinding = Findings.FirstOrDefault();
+        SelectedFinding = Findings.FirstOrDefault(f => f.Finding.Fingerprint == keepFingerprint) ?? Findings.FirstOrDefault();
         foreach (var n in new[] { nameof(HasFindings), nameof(HasNoFindings), nameof(TotalCount), nameof(TotalText), nameof(SeverityCaption) })
             OnPropertyChanged(n);
     }
@@ -353,21 +424,32 @@ public sealed class ToolApprovalViewModel(string name, Action changed) : Observa
 public sealed class SecondBrainViewModel : PageViewModel
 {
     private readonly ISecondBrainRepository _repository;
+    private readonly IExternalLauncher? _launcher;
     private string _query = string.Empty;
     private string _searchResult = string.Empty;
+    private string _statsText = string.Empty;
 
-    public SecondBrainViewModel(ISecondBrainRepository repository)
+    public SecondBrainViewModel(ISecondBrainRepository repository, IExternalLauncher? launcher = null)
     {
         _repository = repository;
-        Status = new EngineStatusViewModel("secondbrain", "PostgreSQL + pgvector", "Knowledge base", "Verified findings, remediations, false positives and history for semantic retrieval (RAG).", "Phase 4");
-        SearchCommand = new AsyncRelayCommand(SearchAsync, () => Query.Trim().Length > 0);
+        _launcher = launcher;
+        Status = new EngineStatusViewModel("secondbrain", "Obsidian vault", "Knowledge base",
+            "Every scan (clean or not), finding, AI analysis and verdict, kept as linked Markdown notes.", "Phase 4");
+        SearchCommand = new AsyncRelayCommand(SearchAsync, () => Query.Trim().Length > 0, ex => SearchResult = "Search failed: " + ex.Message);
+        OpenVaultCommand = new RelayCommand(() => Open(null), () => _repository.GetNoteUri(null) is not null);
+        OpenDashboardCommand = new RelayCommand(() => Open("Dashboard.md"), () => _repository.GetNoteUri(null) is not null);
     }
 
     public override PageKey Key => PageKey.SecondBrain;
     public override string Title => "Second Brain";
-    public override string Subtitle => "Cases, solutions and history";
+    public override string Subtitle => "Every scan, finding and verdict in your Obsidian vault";
     public EngineStatusViewModel Status { get; }
     public AsyncRelayCommand SearchCommand { get; }
+    public ICommand OpenVaultCommand { get; }
+    public ICommand OpenDashboardCommand { get; }
+    public ObservableCollection<KnowledgeHitViewModel> Results { get; } = [];
+    public bool HasResults => Results.Count > 0;
+    public string StatsText { get => _statsText; private set => SetProperty(ref _statsText, value); }
 
     public string Query
     {
@@ -381,27 +463,50 @@ public sealed class SecondBrainViewModel : PageViewModel
 
     public IReadOnlyList<LabeledValue> Entities { get; } =
     [
-        new("Projects", "Local path, identity, languages"),
-        new("Scan Sessions", "Time, commit, engine versions, parameters"),
-        new("Security Findings", "Rule, CWE/CVE, severity, confidence, fingerprint, status"),
-        new("Finding Occurrences", "Per-scan sightings for regression tracking"),
-        new("Security Evidence", "Redacted snippets and tool output"),
-        new("Threat Intelligence", "Advisory/IOC snapshots with source and sync time"),
-        new("Remediation Knowledge", "Validated fixes and reviewer"),
-        new("Validation History", "Confirmed, false positive, accepted risk, fixed"),
-        new("Knowledge Embeddings", "pgvector embeddings with provenance"),
+        new("Dashboard.md", "Projects, open Critical/High findings and recent scans"),
+        new("Projects/", "One note per scanned folder: scan history and current findings"),
+        new("Scans/", "One note per scan — clean scans included — with engines, results and inventory"),
+        new("Findings/", "One note per unique finding: evidence, occurrences, AI analyses, validation history"),
+        new("Rules/", "What each rule has found; add your team's fix guidance here"),
+        new("My notes", "Each note ends with a section WebGuard never touches"),
     ];
 
-    public async Task RefreshAsync(CancellationToken cancellationToken = default) =>
-        Status.Apply(await _repository.GetStatusAsync(cancellationToken).ConfigureAwait(true));
-
-    private async Task SearchAsync()
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        var hits = await _repository.SearchSimilarAsync(Query.Trim(), 10, CancellationToken.None).ConfigureAwait(true);
-        SearchResult = hits.Count == 0
-            ? "No knowledge yet. Semantic search becomes available when the Second Brain is connected in Phase 4."
-            : $"{hits.Count} similar cases found.";
+        Status.Apply(await _repository.GetStatusAsync(cancellationToken).ConfigureAwait(true));
+        var stats = await _repository.GetStatisticsAsync(cancellationToken).ConfigureAwait(true);
+        StatsText = $"{stats.Projects} projects · {stats.Scans} scans · {stats.Findings} findings · {stats.Validated} validated";
+        (OpenVaultCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
+        (OpenDashboardCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
     }
+
+    internal async Task SearchAsync()
+    {
+        SearchResult = "Searching…";
+        Results.Clear();
+        var hits = await _repository.SearchSimilarAsync(Query.Trim(), 15, CancellationToken.None).ConfigureAwait(true);
+        foreach (var hit in hits) Results.Add(new KnowledgeHitViewModel(hit, () => Open(hit.NotePath)));
+        SearchResult = hits.Count == 0
+            ? "No matching knowledge yet. Findings are added automatically after each scan."
+            : $"{hits.Count} matching finding(s), best first.";
+        OnPropertyChanged(nameof(HasResults));
+    }
+
+    private void Open(string? notePath)
+    {
+        if (_repository.GetNoteUri(notePath) is { } uri) _launcher?.Open(uri);
+    }
+}
+
+/// <summary>One search hit on the Second Brain page.</summary>
+public sealed class KnowledgeHitViewModel(KnowledgeSearchHit hit, Action open)
+{
+    public string Title => hit.Title;
+    public Severity Severity => hit.Severity;
+    public string SeverityText => hit.Severity.ToString();
+    public string Details => $"{hit.Status}{(hit.Project is null ? string.Empty : " · " + hit.Project)} · match {hit.Similarity:0.00}";
+    public string Snippet => hit.Snippet;
+    public ICommand OpenCommand { get; } = new RelayCommand(open);
 }
 
 public sealed class IntelligenceViewModel : PageViewModel
@@ -544,10 +649,18 @@ public sealed class SettingsViewModel : PageViewModel
     private bool _aiEnabled;
     private string _aiEndpoint = string.Empty;
     private string _aiModel = string.Empty;
+    private string _vaultPath = string.Empty;
+    private bool _autoRecord;
+    private readonly IFolderPicker? _folderPicker;
     private string _saveMessage = string.Empty;
 
-    public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines)
+    public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines, IFolderPicker? folderPicker = null)
     {
+        _folderPicker = folderPicker;
+        BrowseVaultCommand = new RelayCommand(() =>
+        {
+            if (_folderPicker?.PickFolder(VaultPath.Length > 0 ? VaultPath : null) is { } picked) VaultPath = picked;
+        }, () => _folderPicker is not null);
         _settings = settings;
         _theme = theme;
         EngineCatalog = engines;
@@ -581,6 +694,9 @@ public sealed class SettingsViewModel : PageViewModel
     public bool AiEnabled { get => _aiEnabled; set => SetProperty(ref _aiEnabled, value); }
     public string AiEndpoint { get => _aiEndpoint; set => SetProperty(ref _aiEndpoint, value?.Trim() ?? string.Empty); }
     public string AiModel { get => _aiModel; set => SetProperty(ref _aiModel, value?.Trim() ?? string.Empty); }
+    public string VaultPath { get => _vaultPath; set => SetProperty(ref _vaultPath, value?.Trim().Trim('"') ?? string.Empty); }
+    public bool AutoRecord { get => _autoRecord; set => SetProperty(ref _autoRecord, value); }
+    public ICommand BrowseVaultCommand { get; }
 
     /// <summary>Executable path (empty = auto-detect) and on/off switch per CLI engine.</summary>
     public ObservableCollection<EngineSettingViewModel> EngineSettings { get; } = [];
@@ -614,6 +730,12 @@ public sealed class SettingsViewModel : PageViewModel
             return;
         }
 
+        if (VaultPath.Length > 0 && !Directory.Exists(VaultPath))
+        {
+            SaveMessage = "Second Brain vault folder not found. Create it (or open it in Obsidian) first.";
+            return;
+        }
+
         var badPath = EngineSettings.FirstOrDefault(e => e.ExecutablePath.Length > 0 && !Path.IsPathFullyQualified(e.ExecutablePath));
         if (badPath is not null)
         {
@@ -636,6 +758,8 @@ public sealed class SettingsViewModel : PageViewModel
             AiEnabled = AiEnabled,
             AiEndpoint = AiEndpoint,
             AiModel = AiModel.Length == 0 ? null : AiModel,
+            SecondBrainVaultPath = VaultPath.Length == 0 ? null : VaultPath,
+            SecondBrainAutoRecord = AutoRecord,
             EngineExecutables = EngineSettings.Where(e => e.ExecutablePath.Length > 0)
                 .ToDictionary(e => e.Id, e => e.ExecutablePath, StringComparer.OrdinalIgnoreCase),
             DisabledEngines = EngineSettings.Where(e => !e.Enabled).Select(e => e.Id).ToArray(),
@@ -655,6 +779,7 @@ public sealed class SettingsViewModel : PageViewModel
         AiEnabled = defaults.AiEnabled;
         AiEndpoint = defaults.AiEndpoint;
         AiModel = string.Empty;
+        AutoRecord = defaults.SecondBrainAutoRecord;
         foreach (var engine in EngineSettings)
         {
             engine.ExecutablePath = string.Empty;
@@ -673,6 +798,8 @@ public sealed class SettingsViewModel : PageViewModel
         AiEnabled = s.AiEnabled;
         AiEndpoint = s.AiEndpoint;
         AiModel = s.AiModel ?? string.Empty;
+        VaultPath = s.SecondBrainVaultPath ?? string.Empty;
+        AutoRecord = s.SecondBrainAutoRecord;
         EngineSettings.Clear();
         foreach (var engine in EngineCatalog.Engines.Where(e => !string.Equals(e.Id, "malware-hash", StringComparison.Ordinal)))
         {
