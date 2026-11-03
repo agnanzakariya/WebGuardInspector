@@ -284,6 +284,26 @@ public static class EngineTests
     }
 
     [Test]
+    public static async Task Process_runner_kills_workers_that_outlive_the_wrapper()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // Like semgrep.exe: the started process exits at once and leaves a worker running with its output handle.
+        var started = DateTime.Now.AddSeconds(-1);
+        var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await new ExternalProcessRunner().RunAsync(
+            new ProcessRunRequest(cmd, ["/c", "start /b ping -n 60 127.0.0.1 >nul & exit 0"], Path.GetTempPath(), TimeSpan.FromSeconds(2), 1 << 20),
+            CancellationToken.None);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), "runner returns soon after its timeout");
+        var orphans = System.Diagnostics.Process.GetProcessesByName("PING").Where(p =>
+        {
+            try { return p.StartTime > started; } catch (InvalidOperationException) { return false; }
+        }).ToArray();
+        Assert.True(result.TimedOut || result.ExitCode == 0, "run finished");
+        Assert.Equal(0, orphans.Length, "worker started by the tool was terminated");
+    }
+
+    [Test]
     public static void Locator_only_returns_absolute_exe_paths()
     {
         using var temp = new TempFolder();

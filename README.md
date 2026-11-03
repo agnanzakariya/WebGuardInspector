@@ -27,7 +27,7 @@ lalu menampilkan hasilnya di halaman Findings.
 | Dark theme default + Light theme, title bar Windows 11 ikut tema | Implemented |
 | Settings tersimpan di `%LOCALAPPDATA%\WebGuardInspector\settings.json` | Implemented |
 | Engine Semgrep (SAST, rule lokal, `--metrics=off`), Gitleaks (secret, `--redact`), OSV-Scanner (dependency), YARA-X (signature) | Implemented (Phase 2) |
-| `ExternalProcessRunner`: path absolut .exe saja, tanpa shell, timeout, batas output, kill process tree | Implemented (Phase 2) |
+| `ExternalProcessRunner`: path absolut .exe saja, tanpa shell, timeout, batas output; cancel/timeout menghentikan semua proses turunan (Windows Job Object) | Implemented (Phase 2) |
 | Rule bawaan `rules\semgrep` dan `rules\yara`; rule kustom lewat `EngineRulePaths` di settings.json | Implemented (Phase 2) |
 | Finding di luar inventory (folder dikecualikan, path keluar root) dibuang; dedupe per fingerprint | Implemented (Phase 2) |
 | Findings: evidence ter-redaksi, CWE/CVE/GHSA, remediasi, status per engine | Implemented (Phase 2) |
@@ -52,7 +52,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 42 tests
+.\build.ps1          # restore + build + 43 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -64,7 +64,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 42 tests
+PASS: 43 tests
 PASS: build and tests completed
 ```
 

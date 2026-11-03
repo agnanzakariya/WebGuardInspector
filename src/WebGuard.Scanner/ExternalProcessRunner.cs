@@ -45,6 +45,8 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
 
         var sw = Stopwatch.StartNew();
         process.Start();
+        // Disposing the job (kill-on-close) also ends any worker the tool left behind after a normal exit.
+        using var job = ProcessJob.TryAttach(process);
         process.StandardInput.Close();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
@@ -58,7 +60,7 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
         }
         catch (OperationCanceledException)
         {
-            Kill(process);
+            Kill(process, job);
             if (cancellationToken.IsCancellationRequested) throw;
             timedOut = true;
         }
@@ -75,11 +77,23 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
             stdout.Truncated);
     }
 
-    private static void Kill(Process process)
+    private static readonly TimeSpan KillWait = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Kills the tool and every process it started (e.g. semgrep.exe → pysemgrep → semgrep-core) and waits for them
+    /// to go, so a canceled scan never leaves workers reading the project in the background.
+    /// </summary>
+    private static void Kill(Process process, ProcessJob? job)
     {
         try
         {
+            if (job is not null)
+            {
+                job.TerminateAndWait(KillWait);
+                return;
+            }
             if (!process.HasExited) process.Kill(entireProcessTree: true);
+            process.WaitForExit(KillWait);
         }
         catch (InvalidOperationException)
         {
