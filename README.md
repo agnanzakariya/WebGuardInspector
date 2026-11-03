@@ -56,7 +56,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 52 tests
+.\build.ps1          # restore + build + 53 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -68,7 +68,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 52 tests
+PASS: 53 tests
 PASS: build and tests completed
 ```
 
@@ -101,7 +101,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (52 tests)
+  WebGuard.Tests         Test runner tanpa dependency (53 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -130,10 +130,15 @@ Setiap engine berjalan berurutan setelah hashing dengan timeout 10 menit. Engine
 **AI Analyst** — menjelaskan satu finding: ringkasan, kenapa berisiko (atau kenapa mungkin false positive), dan usulan
 perbaikan. Hasil selalu ditandai *AI hypothesis — not verified*; tidak ada file yang diubah.
 
-1. Install [LM Studio](https://lmstudio.ai), unduh model chat (mis. model coder ~7B), lalu **Developer → Start Server**
-   (default `http://127.0.0.1:1234/v1`). Ollama juga bisa: `http://127.0.0.1:11434/v1`.
+1. Install [LM Studio](https://lmstudio.ai), unduh model chat, muat, lalu nyalakan server lokal. Lewat CLI:
+   `lms get qwen/qwen3.5-9b`, `lms load qwen/qwen3.5-9b -c 8192`, `lms server start --port 1234`
+   (atau **Developer → Start Server**). Ollama juga bisa: `http://127.0.0.1:11434/v1`.
 2. Settings → *AI Analyst (local)*: endpoint dan model (kosong = model chat pertama yang dimuat).
 3. Findings → pilih finding → **Analyze with AI**.
+
+Untuk model *reasoning* (Qwen3.5/3.6, gpt-oss) WebGuard mengirim `reasoning_effort: "none"`; tanpa itu model di CPU
+menghabiskan seluruh jatah token untuk "berpikir" dan tidak memberi jawaban. Diuji live dengan Qwen3.5 9B (Q4_K_M) di CPU
+i7-1185G7 tanpa GPU: ±30–60 detik per finding.
 
 Hanya endpoint localhost yang diterima. Model menerima cuplikan kode di sekitar finding yang **sudah diredaksi**
 (token, password, private key, connection string) dan diberi instruksi bahwa kode adalah data tak tepercaya
@@ -172,7 +177,8 @@ yang ditolak — dicatat di `%LOCALAPPDATA%\WebGuardInspector\mcp-audit.jsonl`.
 - `FindingContextBuilder`, `SourceRedactor`, `ProjectScope` di Core: konteks bernomor baris, redaksi secret, scope folder.
 - Server MCP stdio `WebGuard.Mcp` (JSON-RPC 2.0, MCP 2025-06-18): 7 tool, approval via `--allow`, anotasi tool, audit log.
 - Halaman AI Analyst: status runtime, katalog tool, konfigurasi klien MCP + perintah Claude Code.
-- Status engine, AI dan intelligence dicek bersamaan saat aplikasi dibuka. 52 tests.
+- Status engine, AI dan intelligence dicek bersamaan saat aplikasi dibuka. 53 tests.
+- Diuji live dengan LM Studio + Qwen3.5 9B: analisis RCE `eval` dan secret Stripe benar, secret tidak terkirim ke model.
 
 **0.3.0** — Phase 2
 - Adapter Semgrep, Gitleaks, OSV-Scanner, YARA-X di atas `ExternalToolEngine` + `ExternalProcessRunner`.

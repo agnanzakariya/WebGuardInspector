@@ -147,6 +147,44 @@ public static class AiMcpTests
     }
 
     [Test]
+    public static async Task Client_turns_reasoning_off_and_explains_empty_answers()
+    {
+        var endpoint = new Uri("http://127.0.0.1:1234/v1");
+        var ok = new FakeHttpHandler(_ => """{"choices":[{"message":{"content":"{\"summary\":\"x\"}"}}]}""");
+        using (var http = new HttpClient(ok))
+        {
+            await new OpenAiCompatibleClient(http).CompleteAsync(endpoint, "m", [new ChatMessage("user", "hi")], CancellationToken.None);
+        }
+        Assert.Equal("none", JsonNode.Parse(ok.Requests.Single().Body)!["reasoning_effort"]!.GetValue<string>(), "reasoning disabled by default");
+
+        // A server that rejects the field gets the request again without it.
+        var calls = 0;
+        var picky = new StatusHandler(body => ++calls == 1 && body.Contains("reasoning_effort", StringComparison.Ordinal)
+            ? (HttpStatusCode.BadRequest, """{"error":"unknown field reasoning_effort"}""")
+            : (HttpStatusCode.OK, """{"choices":[{"message":{"content":"answer"}}]}"""));
+        using (var http = new HttpClient(picky))
+        {
+            var answer = await new OpenAiCompatibleClient(http).CompleteAsync(endpoint, "m", [new ChatMessage("user", "hi")], CancellationToken.None);
+            Assert.Equal("answer", answer, "retried without reasoning_effort");
+            Assert.True(!picky.Bodies[1].Contains("reasoning_effort", StringComparison.Ordinal), "field dropped on retry");
+        }
+
+        var thinker = new FakeHttpHandler(_ => """{"choices":[{"message":{"content":"","reasoning_content":"Thinking Process: ..."}}]}""");
+        using (var http = new HttpClient(thinker))
+        {
+            try
+            {
+                await new OpenAiCompatibleClient(http).CompleteAsync(endpoint, "m", [new ChatMessage("user", "hi")], CancellationToken.None);
+                throw new AssertionException("expected an error for an empty answer");
+            }
+            catch (HttpRequestException ex)
+            {
+                Assert.True(ex.Message.Contains("reasoning", StringComparison.Ordinal), "explains the token budget went to reasoning");
+            }
+        }
+    }
+
+    [Test]
     public static async Task Findings_page_analyzes_selected_finding_and_caches_it()
     {
         using var temp = new TempFolder();
@@ -273,6 +311,19 @@ public static class AiMcpTests
     private static ScanReport Report(string root, IReadOnlyList<SecurityFinding> findings) => new(
         ScanReport.CurrentSchemaVersion, "test", Guid.NewGuid(), root, "pc", Now, Now, ScanOptions.Default,
         new ScanStatistics(1, 1, 0, 0, 1, 0), [], [], findings);
+
+    private sealed class StatusHandler(Func<string, (HttpStatusCode Status, string Body)> respond) : HttpMessageHandler
+    {
+        public List<string> Bodies { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
+            Bodies.Add(body);
+            var (status, text) = respond(body);
+            return new HttpResponseMessage(status) { Content = new StringContent(text, Encoding.UTF8, "application/json") };
+        }
+    }
 
     private sealed class ThrowingHandler : HttpMessageHandler
     {
