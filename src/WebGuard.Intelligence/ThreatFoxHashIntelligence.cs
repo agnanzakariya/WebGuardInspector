@@ -39,16 +39,23 @@ public sealed class ThreatFoxHashIntelligence(
         var s = settings();
         if (!s.AllowExternalLookups || string.IsNullOrWhiteSpace(s.AbuseChAuthKey)) return null;
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint)
-        {
-            Content = JsonContent.Create(new SearchHash("search_hash", hash)),
-        };
-        request.Headers.Add("Auth-Key", s.AbuseChAuthKey.Trim());
-        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        var verdict = Parse(hash, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false), _time.GetUtcNow());
+        // "search_hash" finds IOCs whose *payload* has this hash (e.g. the sample that contacted a C2);
+        // a file that is itself listed as a sha256_hash IOC is only found by "search_ioc". Ask both.
+        var authKey = s.AbuseChAuthKey.Trim();
+        var verdict = await QueryAsync(new SearchHash("search_hash", hash), hash, authKey, cancellationToken).ConfigureAwait(false);
+        if (!verdict.IsKnownMalicious)
+            verdict = await QueryAsync(new SearchIoc("search_ioc", hash, true), hash, authKey, cancellationToken).ConfigureAwait(false);
         await cache.SetAsync(key, verdict, SourceId, cancellationToken).ConfigureAwait(false);
         return verdict;
+    }
+
+    private async Task<MalwareHashVerdict> QueryAsync(object query, string hash, string authKey, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = JsonContent.Create(query) };
+        request.Headers.Add("Auth-Key", authKey);
+        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return Parse(hash, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false), _time.GetUtcNow());
     }
 
     public static MalwareHashVerdict Parse(string sha256, string json, DateTimeOffset retrievedAtUtc)
@@ -80,4 +87,9 @@ public sealed class ThreatFoxHashIntelligence(
     private sealed record SearchHash(
         [property: JsonPropertyName("query")] string Query,
         [property: JsonPropertyName("hash")] string Hash);
+
+    private sealed record SearchIoc(
+        [property: JsonPropertyName("query")] string Query,
+        [property: JsonPropertyName("search_term")] string SearchTerm,
+        [property: JsonPropertyName("exact_match")] bool ExactMatch);
 }

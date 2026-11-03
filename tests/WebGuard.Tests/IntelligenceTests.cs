@@ -140,6 +140,19 @@ public static class IntelligenceTests
         Assert.True(!ThreatFoxHashIntelligence.Parse(hash, """{"query_status":"no_result","data":"Your search did not yield any results"}""", Now).IsKnownMalicious, "clean");
         await Assert.ThrowsAsync<HttpRequestException>(() =>
             Task.FromResult(ThreatFoxHashIntelligence.Parse(hash, """{"query_status":"unknown_auth_key"}""", Now)));
+        // A file listed as a sha256_hash IOC is not a payload hash: only search_ioc finds it.
+        var iocHash = new string('f', 64);
+        var fallback = new FakeHttpHandler(r => r.Content!.ReadAsStringAsync().Result.Contains("search_ioc", StringComparison.Ordinal)
+            ? """{"query_status":"ok","data":[{"ioc":"ffff","ioc_type":"sha256_hash","malware_printable":"Cobalt Strike"}]}"""
+            : """{"query_status":"no_result"}""");
+        using var fallbackHttp = new HttpClient(fallback);
+        var tf2 = new ThreatFoxHashIntelligence(fallbackHttp, new FileIntelligenceCache(Path.Combine(temp.Path, "c2")), () => new IntelligenceSettings(true, "key-1"));
+        var ioc = await tf2.LookupAsync(iocHash, CancellationToken.None);
+        Assert.True(ioc!.IsKnownMalicious, "found via search_ioc");
+        Assert.Equal("Cobalt Strike", ioc.Family, "family from IOC");
+        Assert.Equal("""{"query":"search_ioc","search_term":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","exact_match":true}""",
+            fallback.Requests[1].Body, "exact IOC search with only the hash");
+
         var off = new ThreatFoxHashIntelligence(http, new FileIntelligenceCache(temp.Path), () => IntelligenceSettings.Offline);
         Assert.Equal(EngineAvailability.Disabled, (await off.GetStatusAsync(CancellationToken.None)).Availability, "consent required");
     }
