@@ -1,0 +1,68 @@
+<UserControl x:Class="WebGuard.Desktop.Views.AiAnalystView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             xmlns:controls="clr-namespace:WebGuard.Desktop.Views.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:AiAnalystViewModel}">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="400"/>
+      </Grid.ColumnDefinitions>
+      <StackPanel Margin="0,0,12,0">
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <TextBlock Text="RUNTIME" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <ContentControl Content="{Binding AnalystStatus}" ContentTemplate="{StaticResource EngineStatusTemplate}" Focusable="False"/>
+            <ContentControl Content="{Binding McpStatus}" ContentTemplate="{StaticResource EngineStatusTemplate}" Focusable="False"/>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Text="MCP TOOLS (planned contract)" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <ItemsControl ItemsSource="{Binding Tools}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="220"/>
+                      <ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Code}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Description}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center"/>
+                    <Border Grid.Column="2" Style="{StaticResource Pill.Tone}" Margin="10,0,0,0">
+                      <TextBlock Style="{StaticResource Text.Tone}" FontSize="11.5">
+                        <Run Text="{Binding Access, Mode=OneWay}"/><Run Text="{Binding RequiresHumanApproval, Mode=OneWay, Converter={StaticResource ApprovalText}}"/>
+                      </TextBlock>
+                    </Border>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <StackPanel Grid.Column="1">
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <TextBlock Text="GUARDRAILS" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <ItemsControl ItemsSource="{Binding Guardrails}" ItemTemplate="{StaticResource BulletTemplate}"/>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Text="CONTEXTUAL COPILOT" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <TextBlock Style="{StaticResource Text.Wrap}"
+                       Text="In Phase 3 the analyst opens as a side panel next to a finding: why it is risky, similar cases from the Second Brain, and a proposed patch you review and apply yourself."/>
+            <Button Style="{StaticResource Button.Primary}" Margin="0,14,0,0" HorizontalAlignment="Left" IsEnabled="False" Content="Analyze Project (Phase 3)"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>WebGuard.Presentation</RootNamespace>
+    <!-- CA1822: bindable view-model properties must stay instance members for WPF data binding. -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WebGuard.Core\WebGuard.Core.csproj" />
+    <InternalsVisibleTo Include="WebGuard.Tests" />
+  </ItemGroup>
+</Project>

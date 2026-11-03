@@ -1,0 +1,34 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Dark theme palette. Only brushes live here so the theme can be swapped at runtime. -->
+  <SolidColorBrush x:Key="Brush.Background" Color="#0F172A"/>
+  <SolidColorBrush x:Key="Brush.Sidebar" Color="#111827"/>
+  <SolidColorBrush x:Key="Brush.Surface" Color="#1E293B"/>
+  <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#172033"/>
+  <SolidColorBrush x:Key="Brush.Border" Color="#2B3A52"/>
+  <SolidColorBrush x:Key="Brush.Hover" Color="#253349"/>
+  <SolidColorBrush x:Key="Brush.Selection" Color="#1D3A6E"/>
+  <SolidColorBrush x:Key="Brush.Input" Color="#0F172A"/>
+  <SolidColorBrush x:Key="Brush.TextPrimary" Color="#F8FAFC"/>
+  <SolidColorBrush x:Key="Brush.TextSecondary" Color="#94A3B8"/>
+  <SolidColorBrush x:Key="Brush.TextMuted" Color="#64748B"/>
+  <SolidColorBrush x:Key="Brush.Primary" Color="#3B82F6"/>
+  <SolidColorBrush x:Key="Brush.PrimaryHover" Color="#2563EB"/>
+  <SolidColorBrush x:Key="Brush.PrimarySoft" Color="#1E3A5F"/>
+  <SolidColorBrush x:Key="Brush.OnPrimary" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="Brush.Success" Color="#22C55E"/>
+  <SolidColorBrush x:Key="Brush.SuccessSoft" Color="#14352A"/>
+  <SolidColorBrush x:Key="Brush.Warning" Color="#F59E0B"/>
+  <SolidColorBrush x:Key="Brush.WarningSoft" Color="#3B2F12"/>
+  <SolidColorBrush x:Key="Brush.Danger" Color="#F87171"/>
+  <SolidColorBrush x:Key="Brush.DangerSoft" Color="#3F1D24"/>
+  <SolidColorBrush x:Key="Brush.Info" Color="#60A5FA"/>
+  <SolidColorBrush x:Key="Brush.InfoSoft" Color="#1E3A5F"/>
+  <!-- Severity colours are used only for severity information. -->
+  <SolidColorBrush x:Key="Brush.Severity.Critical" Color="#DC2626"/>
+  <SolidColorBrush x:Key="Brush.Severity.High" Color="#EA580C"/>
+  <SolidColorBrush x:Key="Brush.Severity.Medium" Color="#CA8A04"/>
+  <SolidColorBrush x:Key="Brush.Severity.Low" Color="#2563EB"/>
+  <SolidColorBrush x:Key="Brush.Severity.Info" Color="#64748B"/>
+  <SolidColorBrush x:Key="Brush.ScrollThumb" Color="#3A4A63"/>
+</ResourceDictionary>

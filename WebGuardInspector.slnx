@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="global.json" />
+    <File Path=".editorconfig" />
+    <File Path="README.md" />
+    <File Path="build.ps1" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/WebGuard.Core/WebGuard.Core.csproj" />
+    <Project Path="src/WebGuard.Scanner/WebGuard.Scanner.csproj" />
+    <Project Path="src/WebGuard.Detection/WebGuard.Detection.csproj" />
+    <Project Path="src/WebGuard.Intelligence/WebGuard.Intelligence.csproj" />
+    <Project Path="src/WebGuard.AI/WebGuard.AI.csproj" />
+    <Project Path="src/WebGuard.Persistence/WebGuard.Persistence.csproj" />
+    <Project Path="src/WebGuard.Presentation/WebGuard.Presentation.csproj" />
+    <Project Path="src/WebGuard.Desktop/WebGuard.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WebGuard.Tests/WebGuard.Tests.csproj" />
+  </Folder>
+</Solution>

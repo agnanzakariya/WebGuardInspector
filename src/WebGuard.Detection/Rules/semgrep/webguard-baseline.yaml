@@ -1,0 +1,132 @@
+# WebGuard Inspector baseline Semgrep rules (local only; no registry download).
+# Add your own rule files next to this one, or point EngineRulePaths in settings.json at another folder.
+rules:
+  - id: webguard.js.eval-dynamic
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Dynamic code evaluation with eval(). If any part of the argument is user-controlled this is code injection.
+    patterns:
+      - pattern: eval($X)
+      - pattern-not: eval("...")
+    metadata:
+      category: security
+      cwe: ["CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      confidence: MEDIUM
+      remediation: Replace eval with JSON.parse or an explicit dispatch table.
+
+  - id: webguard.js.new-function
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: new Function() compiles a string into code at runtime.
+    pattern: new Function(...)
+    metadata:
+      category: security
+      cwe: ["CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      confidence: MEDIUM
+
+  - id: webguard.js.child-process-exec
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: child_process exec() runs through a shell. Concatenated or templated input enables command injection.
+    pattern-either:
+      - pattern: $CP.exec($CMD + $X, ...)
+      - pattern: $CP.execSync($CMD + $X, ...)
+      - pattern: $CP.exec(`...${$X}...`, ...)
+      - pattern: $CP.execSync(`...${$X}...`, ...)
+    metadata:
+      category: security
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      confidence: MEDIUM
+      remediation: Use execFile/spawn with an argument array and no shell.
+
+  - id: webguard.js.innerhtml-assignment
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Assigning to innerHTML with non-constant data can lead to cross-site scripting.
+    patterns:
+      - pattern: $EL.innerHTML = $X
+      - pattern-not: $EL.innerHTML = "..."
+    metadata:
+      category: security
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      confidence: LOW
+      remediation: Use textContent, or sanitize with a vetted library such as DOMPurify.
+
+  - id: webguard.python.subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: Command runs through a shell (shell=True or os.system). Any interpolated input becomes a command injection.
+    pattern-either:
+      - pattern: subprocess.$F(..., shell=True, ...)
+      - pattern: os.system($X)
+    metadata:
+      category: security
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      confidence: MEDIUM
+      remediation: Pass an argument list with shell=False.
+
+  - id: webguard.python.yaml-unsafe-load
+    languages: [python]
+    severity: ERROR
+    message: yaml.load without SafeLoader can construct arbitrary Python objects.
+    patterns:
+      - pattern: yaml.load(...)
+      - pattern-not: yaml.load(..., Loader=yaml.SafeLoader, ...)
+      - pattern-not: yaml.load(..., Loader=SafeLoader, ...)
+    metadata:
+      category: security
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      confidence: HIGH
+      remediation: Use yaml.safe_load.
+
+  - id: webguard.python.pickle-load
+    languages: [python]
+    severity: WARNING
+    message: pickle deserialization executes code embedded in the data. Never unpickle untrusted input.
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)
+    metadata:
+      category: security
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      confidence: LOW
+
+  - id: webguard.csharp.sql-string-concat
+    languages: [csharp]
+    severity: ERROR
+    message: SQL command text is built by string concatenation, which allows SQL injection.
+    pattern-either:
+      - pattern: new SqlCommand("..." + $X, ...)
+      - pattern: $CMD.CommandText = "..." + $X
+    metadata:
+      category: security
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      confidence: MEDIUM
+      remediation: Use parameterized queries (SqlParameter / command.Parameters.AddWithValue).
+
+  - id: webguard.csharp.binaryformatter
+    languages: [csharp]
+    severity: ERROR
+    message: BinaryFormatter is unsafe for untrusted data and is removed in modern .NET.
+    pattern: new BinaryFormatter()
+    metadata:
+      category: security
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      confidence: HIGH
+      remediation: Use System.Text.Json or another safe serializer.
+
+  - id: webguard.php.eval-request
+    languages: [php]
+    severity: ERROR
+    message: PHP eval/system is fed directly from request input. This is a classic web shell / RCE pattern.
+    pattern-either:
+      - pattern: eval($_GET[$K])
+      - pattern: eval($_POST[$K])
+      - pattern: eval($_REQUEST[$K])
+      - pattern: system($_GET[$K])
+      - pattern: system($_POST[$K])
+      - pattern: system($_REQUEST[$K])
+    metadata:
+      category: security
+      cwe: ["CWE-94: Improper Control of Generation of Code"]
+      confidence: HIGH

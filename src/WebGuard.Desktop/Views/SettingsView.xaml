@@ -1,0 +1,96 @@
+<UserControl x:Class="WebGuard.Desktop.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             xmlns:controls="clr-namespace:WebGuard.Desktop.Views.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="420"/>
+      </Grid.ColumnDefinitions>
+      <StackPanel Margin="0,0,12,0">
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <TextBlock Text="APPEARANCE" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" Content="Dark theme (default)"/>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Text="SCANNING" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
+            <TextBlock Text="Excluded folder names (one per line, matched at any depth)" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+            <TextBox Style="{StaticResource TextBox.MultiLine}" Text="{Binding ExcludedDirectoriesText, UpdateSourceTrigger=PropertyChanged}"
+                     Height="170" AutomationProperties.Name="Excluded folders"/>
+            <Grid Margin="0,14,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Text="Hash limit (MB)" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+                <TextBox Text="{Binding MaxHashMegabytesText, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left"
+                         AutomationProperties.Name="Hash limit in megabytes"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Margin="24,0,0,0">
+                <TextBlock Text="Parallel file readers" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+                <ListBox Style="{StaticResource Segmented}" ItemsSource="{Binding ParallelismOptions}" SelectedItem="{Binding Parallelism, Mode=TwoWay}"
+                         HorizontalAlignment="Left" AutomationProperties.Name="Parallel file readers"/>
+              </StackPanel>
+            </Grid>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,12,0,0"
+                       Text="Scans are read-only. Symbolic links and junctions are never followed, so a scan cannot leave the selected folder."/>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Text="PRIVACY" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AllowExternalIntelligence, Mode=TwoWay}"
+                      Content="Allow external threat-intelligence lookups"/>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="50,6,0,0"
+                       Text="When enabled, only package names/versions (OSV-Scanner, OSV.dev) and SHA-256 hashes (MalwareBazaar) are sent. The public CISA KEV catalog is downloaded. Source code and credentials never leave this machine."/>
+            <TextBlock Text="abuse.ch Auth-Key (MalwareBazaar hash lookups, optional)" Style="{StaticResource Text.Secondary}" Margin="0,14,0,6"/>
+            <TextBox Text="{Binding AbuseChAuthKey, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
+                     Tag="Paste the free key from auth.abuse.ch" AutomationProperties.Name="abuse.ch Auth-Key"/>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="Stored in the per-user settings file below. Leave empty to skip hash lookups."/>
+          </StackPanel>
+        </Border>
+        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+          <Button Style="{StaticResource Button.Primary}" Content="Save Settings" Command="{Binding SaveCommand}"/>
+          <Button Style="{StaticResource Button.Secondary}" Content="Restore Defaults" Command="{Binding ResetCommand}" Margin="10,0,0,0"/>
+          <TextBlock Text="{Binding SaveMessage}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+        </StackPanel>
+        <TextBlock Style="{StaticResource Text.Caption}" Margin="0,10,0,0">
+          <Run Text="Settings file: "/><Run Text="{Binding SettingsFile, Mode=OneWay}" FontFamily="{StaticResource Font.Code}"/>
+        </TextBlock>
+      </StackPanel>
+      <Border Grid.Column="1" Style="{StaticResource Card}" VerticalAlignment="Top">
+        <StackPanel>
+          <TextBlock Text="SECURITY ENGINES" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+          <ItemsControl ItemsSource="{Binding EngineCatalog.Engines}" ItemTemplate="{StaticResource EngineStatusTemplate}"/>
+          <TextBlock Text="ENGINE EXECUTABLES" Style="{StaticResource Text.Label}" Margin="0,8,0,4"/>
+          <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,0,0,10"
+                     Text="Absolute path to each .exe. Leave empty to auto-detect an installed .exe (PATH, WinGet, Scoop, Go, Cargo); the resolved absolute path is shown above. Scripts (.cmd/.bat) are never run."/>
+          <ItemsControl ItemsSource="{Binding EngineSettings}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,0,0,10">
+                  <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding Enabled, Mode=TwoWay}" Content="{Binding Name}"/>
+                  <TextBox Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}" Margin="0,6,0,0"
+                           Tag="Auto-detect" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} executable path'}"/>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
+                     Text="Custom rule files can be set per engine with EngineRulePaths in settings.json; otherwise the bundled rules are used. Press Save Settings to apply."/>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

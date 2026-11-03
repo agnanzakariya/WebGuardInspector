@@ -1,0 +1,32 @@
+<Application x:Class="WebGuard.Desktop.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             xmlns:views="clr-namespace:WebGuard.Desktop.Views"
+             xmlns:conv="clr-namespace:WebGuard.Desktop.Converters"
+             ShutdownMode="OnMainWindowClose">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- Index 0 is the palette; ThemeService replaces it at runtime. -->
+        <ResourceDictionary Source="Themes/Dark.xaml"/>
+        <ResourceDictionary Source="Themes/Controls.xaml"/>
+      </ResourceDictionary.MergedDictionaries>
+
+      <conv:InverseBoolConverter x:Key="InverseBool"/>
+      <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+      <conv:StringToVisibilityConverter x:Key="StringToVisibility"/>
+      <conv:ApprovalTextConverter x:Key="ApprovalText"/>
+
+      <!-- ViewModel → View mapping used by the shell's ContentControl. -->
+      <DataTemplate DataType="{x:Type vm:OverviewViewModel}"><views:OverviewView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:LocalScannerViewModel}"><views:LocalScannerView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:FindingsViewModel}"><views:FindingsView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:AiAnalystViewModel}"><views:AiAnalystView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:SecondBrainViewModel}"><views:SecondBrainView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:IntelligenceViewModel}"><views:IntelligenceView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:ScanHistoryViewModel}"><views:ScanHistoryView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><views:SettingsView/></DataTemplate>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

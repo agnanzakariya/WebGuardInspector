@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>WebGuard.Detection</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WebGuard.Core\WebGuard.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Bundled rules ship next to the app as <app>\rules\semgrep and <app>\rules\yara. -->
+    <None Include="Rules\**\*" LinkBase="rules" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,84 @@
+<UserControl x:Class="WebGuard.Desktop.Views.IntelligenceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             xmlns:controls="clr-namespace:WebGuard.Desktop.Views.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:IntelligenceViewModel}">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="400"/>
+      </Grid.ColumnDefinitions>
+      <StackPanel Margin="0,0,12,0">
+      <Border Style="{StaticResource Card}" VerticalAlignment="Top">
+        <StackPanel>
+          <TextBlock Text="SOURCES" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+          <ItemsControl ItemsSource="{Binding Sources}" ItemTemplate="{StaticResource EngineStatusTemplate}"/>
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+        <StackPanel>
+          <TextBlock Text="PACKAGE LOOKUP" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+          <TextBlock Text="Ecosystem" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+          <ListBox Style="{StaticResource Segmented}" ItemsSource="{Binding Ecosystems}" SelectedItem="{Binding Ecosystem, Mode=TwoWay}"
+                   HorizontalAlignment="Left" AutomationProperties.Name="Package ecosystem">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel/>
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+          </ListBox>
+          <Grid Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="160"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Text="{Binding PackageName, UpdateSourceTrigger=PropertyChanged}" Tag="Package name, e.g. lodash"
+                     AutomationProperties.Name="Package name"/>
+            <TextBox Grid.Column="1" Text="{Binding PackageVersion, UpdateSourceTrigger=PropertyChanged}" Tag="Version, e.g. 4.17.15"
+                     Margin="8,0,0,0" AutomationProperties.Name="Package version"/>
+            <Button Grid.Column="2" Style="{StaticResource Button.Primary}" Content="Look up" Command="{Binding LookupCommand}" Margin="8,0,0,0"/>
+          </Grid>
+          <TextBlock Text="{Binding LookupMessage}" Style="{StaticResource Text.Wrap}" Margin="0,10,0,0"/>
+          <ItemsControl ItemsSource="{Binding Results}" Margin="0,8,0,0"
+                        Visibility="{Binding HasResults, Converter={StaticResource BoolToVisibility}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Style="{StaticResource Inset}" Margin="0,0,0,8">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                      <Border Style="{StaticResource Pill.Severity}">
+                        <TextBlock Text="{Binding SeverityText}" Foreground="White" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                      </Border>
+                      <TextBlock Text="{Binding Id}" Style="{StaticResource Text.Code}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                      <Border Background="{DynamicResource Brush.DangerSoft}" CornerRadius="{StaticResource Radius.Pill}" Padding="8,1" Margin="10,0,0,0"
+                              Visibility="{Binding KnownExploited, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Known exploited" Foreground="{DynamicResource Brush.Danger}" FontSize="11.5" FontWeight="SemiBold"/>
+                      </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Summary}" Style="{StaticResource Text.Wrap}" Margin="0,6,0,0"/>
+                    <TextBlock Text="{Binding FixedText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0"/>
+                    <TextBlock Text="{Binding Aliases}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding RetrievedText}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+      </StackPanel>
+      <Border Grid.Column="1" Style="{StaticResource Card}" VerticalAlignment="Top">
+        <StackPanel>
+          <TextBlock Text="PRIVACY RULES" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+          <ItemsControl ItemsSource="{Binding PrivacyRules}" ItemTemplate="{StaticResource BulletTemplate}"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

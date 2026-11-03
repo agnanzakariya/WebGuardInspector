@@ -1,0 +1,35 @@
+<UserControl x:Class="WebGuard.Desktop.Views.ScanHistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             xmlns:controls="clr-namespace:WebGuard.Desktop.Views.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:ScanHistoryViewModel}">
+  <Border Style="{StaticResource Card}" Padding="0">
+    <Grid>
+      <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" Margin="6"
+                Visibility="{Binding HasItems, Converter={StaticResource BoolToVisibility}}">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Started" Binding="{Binding StartedText}" Width="1.1*" ElementStyle="{StaticResource Cell.Text}"/>
+          <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="2.4*" ElementStyle="{StaticResource Cell.Secondary}"/>
+          <DataGridTextColumn Header="Files" Binding="{Binding FilesText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+          <DataGridTextColumn Header="Hashed" Binding="{Binding HashedText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+          <DataGridTextColumn Header="Errors" Binding="{Binding ErrorsText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+          <DataGridTextColumn Header="Findings" Binding="{Binding FindingsText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+          <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" Width="0.7*" ElementStyle="{StaticResource Cell.Secondary}"/>
+          <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="0.7*" ElementStyle="{StaticResource Cell.Secondary}"/>
+          <DataGridTextColumn Header="Scan ID" Binding="{Binding ScanIdShort}" Width="0.7*" ElementStyle="{StaticResource Cell.Code}"/>
+        </DataGrid.Columns>
+      </DataGrid>
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24"
+                  Visibility="{Binding HasNoItems, Converter={StaticResource BoolToVisibility}}">
+        <TextBlock Text="&#xE81C;" Style="{StaticResource Text.Icon}" FontSize="36" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}"/>
+        <TextBlock Text="No scans in this session" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" Margin="0,12,0,4"/>
+        <TextBlock Text="Completed scans are listed here so you can compare file counts between runs. Persistent history and regression tracking arrive with the Second Brain (Phase 4)."
+                   Style="{StaticResource Text.Wrap}" TextAlignment="Center" MaxWidth="460"/>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

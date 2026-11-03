@@ -1,0 +1,125 @@
+<UserControl x:Class="WebGuard.Desktop.Views.OverviewView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             xmlns:controls="clr-namespace:WebGuard.Desktop.Views.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:OverviewViewModel}">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*" MinHeight="240"/>
+      <RowDefinition Height="250"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition Width="370"/>
+    </Grid.ColumnDefinitions>
+
+    <controls:WorkflowHeader Grid.ColumnSpan="2" DataContext="{Binding Workspace}"/>
+    <controls:StatCards Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,0"/>
+    <controls:FileInventoryPanel Grid.Row="2" Margin="0,12,12,0" DataContext="{Binding Workspace}"/>
+    <controls:FileDetailsPanel Grid.Row="2" Grid.Column="1" Margin="0,12,0,0" DataContext="{Binding Workspace}"/>
+
+    <!-- Security findings -->
+    <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,12,12,0">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid Margin="0,0,0,10">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE7BA;" Style="{StaticResource Text.Icon}" Foreground="{DynamicResource Brush.Danger}"/>
+            <TextBlock Text="Security Findings" Style="{StaticResource Text.Section}" Margin="10,0,0,0"/>
+            <TextBlock Text="{Binding Findings.TotalText, StringFormat='({0} total)'}" Style="{StaticResource Text.Secondary}" Margin="10,1,0,0"/>
+          </StackPanel>
+          <Button Style="{StaticResource Button.Link}" Content="Open Findings ›" HorizontalAlignment="Right"
+                  Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Findings"/>
+        </Grid>
+        <DataGrid Grid.Row="1" ItemsSource="{Binding Findings.Findings}" RowHeight="30"
+                  Visibility="{Binding Findings.HasFindings, Converter={StaticResource BoolToVisibility}}">
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Header="Severity" Width="110" SortMemberPath="Severity">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Pill.Severity}">
+                    <TextBlock Text="{Binding SeverityText}" Foreground="White" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                  </Border>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="File" Binding="{Binding File}" Width="*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTextColumn Header="Issue" Binding="{Binding Title}" Width="1.2*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}"/>
+          </DataGrid.Columns>
+        </DataGrid>
+        <Grid Grid.Row="1" Visibility="{Binding Findings.HasNoFindings, Converter={StaticResource BoolToVisibility}}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <Border Style="{StaticResource IconTile}" Background="{DynamicResource Brush.InfoSoft}" Margin="0,2,14,0">
+            <TextBlock Text="&#xEA18;" Style="{StaticResource Text.Icon}" FontSize="20" Foreground="{DynamicResource Brush.Info}" HorizontalAlignment="Center"/>
+          </Border>
+          <StackPanel Grid.Column="1">
+            <TextBlock Text="{Binding Findings.EmptyTitle}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Findings.EmptyMessage}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,4,0,10"/>
+            <ItemsControl ItemsSource="{Binding EngineCatalog.Engines}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Pill.Tone}" Margin="0,0,8,6" Padding="10,3" ToolTip="{Binding Description}">
+                    <TextBlock Style="{StaticResource Text.Base}" FontSize="12">
+                      <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" · "/><Run Text="{Binding Availability, Mode=OneWay}" Foreground="{DynamicResource Brush.Info}"/>
+                    </TextBlock>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <!-- AI Analyst + inventory insights -->
+    <Border Grid.Row="3" Grid.Column="1" Style="{StaticResource Card}" Margin="0,12,0,0">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" Foreground="{DynamicResource Brush.Primary}"/>
+            <TextBlock Text="AI Analyst" Style="{StaticResource Text.Section}" Margin="10,0,0,0"/>
+          </StackPanel>
+          <Button HorizontalAlignment="Right" Style="{StaticResource Button.Secondary}" Padding="10,5" IsEnabled="False"
+                  ToolTip="Local AI analysis via MCP arrives in Phase 3">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="12"/>
+              <TextBlock Text="Analyze Project" Margin="6,0,0,0" FontSize="12"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+        <TextBlock Grid.Row="1" Text="Inventory hints (by file name only — not findings)" Style="{StaticResource Text.Label}" Margin="0,10,0,8"/>
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+          <Grid>
+            <ItemsControl ItemsSource="{Binding Workspace.Insights}" ItemTemplate="{StaticResource InsightTemplate}"/>
+            <TextBlock Text="Run a scan to see which areas deserve attention. Engine findings are on the Findings page; AI recommendations arrive in Phase 3."
+                       Style="{StaticResource Text.Wrap}" FontSize="12"
+                       Visibility="{Binding Workspace.HasNoReport, Converter={StaticResource BoolToVisibility}}"/>
+          </Grid>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

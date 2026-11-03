@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+reports/
+*.json.tmp
+TestResults/
