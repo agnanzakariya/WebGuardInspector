@@ -64,6 +64,13 @@ public partial class App : Application
             new MalwareHashLookupEngine(malware),
         ];
         IFindingEnricher[] enrichers = [new KnownExploitedEnricher(kev, Intelligence)];
+
+        // Local model calls can take minutes on CPU; each analysis has its own timeout instead of the client's.
+        var aiHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        AiSettings Ai() => new(settings.Current.AiEnabled, settings.Current.AiEndpoint, settings.Current.AiModel);
+        var analyst = new LocalAiSecurityAnalyst(new OpenAiCompatibleClient(aiHttp), Ai);
+        var mcp = new StdioMcpServerHost(StdioMcpServerHost.BundledExecutablePath);
+        var clipboard = new ClipboardService();
         var history = new InMemoryScanHistoryStore();
 
         var workspace = new ScanWorkspaceViewModel(
@@ -73,18 +80,18 @@ public partial class App : Application
             settings,
             new FolderPicker(),
             new SaveFileDialogService(),
-            new ClipboardService(),
+            clipboard,
             new DialogService());
 
         var catalog = new EngineCatalogViewModel(engines);
-        var findings = new FindingsViewModel(catalog);
+        var findings = new FindingsViewModel(catalog, analyst);
 
         return new ShellViewModel(
             workspace,
             new OverviewViewModel(workspace, findings, catalog),
             new LocalScannerViewModel(workspace, settings),
             findings,
-            new AiAnalystViewModel(new PlannedAiSecurityAnalyst(), new PlannedMcpServerHost()),
+            new AiAnalystViewModel(analyst, mcp, workspace, clipboard),
             new SecondBrainViewModel(new PlannedSecondBrainRepository()),
             new IntelligenceViewModel(vulnerabilities, malware),
             new ScanHistoryViewModel(history),

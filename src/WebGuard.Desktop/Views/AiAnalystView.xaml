@@ -11,7 +11,7 @@
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="400"/>
+        <ColumnDefinition Width="440"/>
       </Grid.ColumnDefinitions>
       <StackPanel Margin="0,0,12,0">
         <Border Style="{StaticResource Card}">
@@ -19,26 +19,31 @@
             <TextBlock Text="RUNTIME" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
             <ContentControl Content="{Binding AnalystStatus}" ContentTemplate="{StaticResource EngineStatusTemplate}" Focusable="False"/>
             <ContentControl Content="{Binding McpStatus}" ContentTemplate="{StaticResource EngineStatusTemplate}" Focusable="False"/>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,4,0,0"
+                       Text="Analyze a finding: open Findings, select it and press Analyze with AI. The model runs locally in LM Studio, Ollama or llama.cpp (endpoint and model in Settings)."/>
+            <Button Style="{StaticResource Button.Secondary}" Content="Open Findings" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="12,5"
+                    Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Findings"/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
           <StackPanel>
-            <TextBlock Text="MCP TOOLS (planned contract)" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <TextBlock Text="MCP TOOLS" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
             <ItemsControl ItemsSource="{Binding Tools}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="220"/>
+                      <ColumnDefinition Width="210"/>
                       <ColumnDefinition Width="*"/>
                       <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Code}" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="{Binding Description}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Description}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap"/>
+                      <TextBlock Text="{Binding Access}" Style="{StaticResource Text.Caption}"/>
+                    </StackPanel>
                     <Border Grid.Column="2" Style="{StaticResource Pill.Tone}" Margin="10,0,0,0">
-                      <TextBlock Style="{StaticResource Text.Tone}" FontSize="11.5">
-                        <Run Text="{Binding Access, Mode=OneWay}"/><Run Text="{Binding RequiresHumanApproval, Mode=OneWay, Converter={StaticResource ApprovalText}}"/>
-                      </TextBlock>
+                      <TextBlock Text="{Binding Availability}" Style="{StaticResource Text.Tone}" FontSize="11.5"/>
                     </Border>
                   </Grid>
                 </DataTemplate>
@@ -50,16 +55,38 @@
       <StackPanel Grid.Column="1">
         <Border Style="{StaticResource Card}">
           <StackPanel>
-            <TextBlock Text="GUARDRAILS" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
-            <ItemsControl ItemsSource="{Binding Guardrails}" ItemTemplate="{StaticResource BulletTemplate}"/>
+            <TextBlock Text="CONNECT AN MCP CLIENT" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12"
+                       Text="Lets an AI agent (Claude Code, LM Studio, Cursor, …) inspect the selected folder through WebGuard's tools. The server is limited to that folder, redacts secrets, never edits files and logs every call."/>
+            <TextBlock Text="Pre-approve gated tools (optional)" Style="{StaticResource Text.Secondary}" Margin="0,12,0,6"/>
+            <ItemsControl ItemsSource="{Binding ApprovableTools}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsApproved, Mode=TwoWay}" Content="{Binding Name}" Margin="0,0,0,6"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="mcpServers config (LM Studio, Claude Desktop, Cursor)" Style="{StaticResource Text.Secondary}" Margin="0,8,0,6"/>
+            <Border Style="{StaticResource Inset}">
+              <TextBox Text="{Binding ClientConfigJson, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+                       Padding="0" FontFamily="{StaticResource Font.Code}" FontSize="11.5" AutomationProperties.Name="MCP client configuration"/>
+            </Border>
+            <TextBlock Text="Claude Code" Style="{StaticResource Text.Secondary}" Margin="0,10,0,6"/>
+            <Border Style="{StaticResource Inset}">
+              <TextBox Text="{Binding ClaudeCodeCommand, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+                       Padding="0" FontFamily="{StaticResource Font.Code}" FontSize="11.5" AutomationProperties.Name="Claude Code command"/>
+            </Border>
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+              <Button Style="{StaticResource Button.Primary}" Content="Copy config" Command="{Binding CopyConfigCommand}" Padding="12,5"/>
+              <Button Style="{StaticResource Button.Secondary}" Content="Copy Claude Code command" Command="{Binding CopyClaudeCommand}" Padding="12,5" Margin="8,0,0,0"/>
+            </StackPanel>
+            <TextBlock Text="{Binding CopyMessage}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0"/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
           <StackPanel>
-            <TextBlock Text="CONTEXTUAL COPILOT" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
-            <TextBlock Style="{StaticResource Text.Wrap}"
-                       Text="In Phase 3 the analyst opens as a side panel next to a finding: why it is risky, similar cases from the Second Brain, and a proposed patch you review and apply yourself."/>
-            <Button Style="{StaticResource Button.Primary}" Margin="0,14,0,0" HorizontalAlignment="Left" IsEnabled="False" Content="Analyze Project (Phase 3)"/>
+            <TextBlock Text="GUARDRAILS" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
+            <ItemsControl ItemsSource="{Binding Guardrails}" ItemTemplate="{StaticResource BulletTemplate}"/>
           </StackPanel>
         </Border>
       </StackPanel>

@@ -66,7 +66,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             new(PageKey.Overview, "Overview", ""),
             new(PageKey.LocalScanner, "Local Scanner", ""),
             new(PageKey.Findings, "Findings", ""),
-            new(PageKey.AiAnalyst, "AI Analyst", "", "Phase 3"),
+            new(PageKey.AiAnalyst, "AI Analyst", ""),
             new(PageKey.SecondBrain, "Second Brain", "", "Phase 4"),
             new(PageKey.Intelligence, "Intelligence", ""),
             new(PageKey.ScanHistory, "Scan History", ""),
@@ -89,6 +89,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             scanner.RefreshPolicy();
             // Intelligence statuses are instant; engine statuses run a version probe per CLI tool, so they go last.
             await intelligence.RefreshAsync().ConfigureAwait(true);
+            await ai.RefreshAsync().ConfigureAwait(true);
             await Engines.RefreshAsync().ConfigureAwait(true);
         };
         settings.Changed += (_, _) => OnPropertyChanged(nameof(IsDarkTheme));
@@ -130,13 +131,19 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     {
         _theme.Apply(_settings.Current.Theme);
         OnPropertyChanged(nameof(IsDarkTheme));
-        await Engines.RefreshAsync().ConfigureAwait(true);
-        await Page<AiAnalystViewModel>().RefreshAsync().ConfigureAwait(true);
-        await Page<SecondBrainViewModel>().RefreshAsync().ConfigureAwait(true);
-        await Page<IntelligenceViewModel>().RefreshAsync().ConfigureAwait(true);
+        // Started together: engine statuses probe each CLI tool's version and must not hold up the others.
+        await Task.WhenAll(
+            Engines.RefreshAsync(),
+            Page<AiAnalystViewModel>().RefreshAsync(),
+            Page<SecondBrainViewModel>().RefreshAsync(),
+            Page<IntelligenceViewModel>().RefreshAsync()).ConfigureAwait(true);
     }
 
-    public void Dispose() => Workspace.Dispose();
+    public void Dispose()
+    {
+        Workspace.Dispose();
+        Page<FindingsViewModel>().Dispose();
+    }
 
     private async Task OnScanCompletedAsync(ScanReport report, FindingsViewModel findings, ScanHistoryViewModel history)
     {

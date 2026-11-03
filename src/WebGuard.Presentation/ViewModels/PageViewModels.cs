@@ -52,17 +52,89 @@ public sealed class EngineCatalogViewModel : ObservableObject
     }
 }
 
-public sealed class FindingsViewModel : PageViewModel
+public sealed class FindingsViewModel : PageViewModel, IDisposable
 {
     private SeveritySummary _summary = SeveritySummary.Empty;
     private FindingItemViewModel? _selected;
     private string _searchText = string.Empty;
     private IReadOnlyList<SecurityFinding> _all = [];
     private ScanReport? _report;
+    private readonly IAiSecurityAnalyst? _analyst;
+    private readonly Dictionary<Guid, AiAnalysisViewModel> _analyses = [];
+    private CancellationTokenSource? _analysisCts;
+    private bool _isAnalyzing;
+    private string _analysisMessage = string.Empty;
 
-    public FindingsViewModel(EngineCatalogViewModel engines)
+    public FindingsViewModel(EngineCatalogViewModel engines, IAiSecurityAnalyst? analyst = null)
     {
         EngineCatalog = engines;
+        _analyst = analyst;
+        AnalyzeCommand = new AsyncRelayCommand(AnalyzeSelectedAsync, () => _analyst is not null && SelectedFinding is not null && !IsAnalyzing,
+            ex => AnalysisMessage = "AI analysis failed: " + ex.Message);
+        CancelAnalysisCommand = new RelayCommand(() => _analysisCts?.Cancel(), () => IsAnalyzing);
+    }
+
+    public AsyncRelayCommand AnalyzeCommand { get; }
+    public ICommand CancelAnalysisCommand { get; }
+    public bool HasAnalyst => _analyst is not null;
+
+    public bool IsAnalyzing
+    {
+        get => _isAnalyzing;
+        private set
+        {
+            if (!SetProperty(ref _isAnalyzing, value)) return;
+            AnalyzeCommand.RaiseCanExecuteChanged();
+            (CancelAnalysisCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string AnalysisMessage { get => _analysisMessage; private set => SetProperty(ref _analysisMessage, value); }
+
+    /// <summary>Analysis of the selected finding, kept per finding while the scan is loaded.</summary>
+    public AiAnalysisViewModel? CurrentAnalysis =>
+        SelectedFinding is not null && _analyses.TryGetValue(SelectedFinding.Finding.Id, out var a) ? a : null;
+
+    public bool HasCurrentAnalysis => CurrentAnalysis is not null;
+
+    /// <summary>Cancels a running analysis (called when the main window closes).</summary>
+    public void Dispose()
+    {
+        _analysisCts?.Cancel();
+        _analysisCts?.Dispose();
+        _analysisCts = null;
+    }
+
+    internal async Task AnalyzeSelectedAsync()
+    {
+        if (_analyst is null || _report is null || SelectedFinding is null || IsAnalyzing) return;
+        var finding = SelectedFinding.Finding;
+        _analysisCts = new CancellationTokenSource();
+        IsAnalyzing = true;
+        AnalysisMessage = "Analyzing with the local model… this can take a minute on CPU.";
+        try
+        {
+            var context = FindingContextBuilder.Build(new ProjectScope(_report.RootFolder), finding, _all);
+            var analysis = await _analyst.AnalyzeAsync(context, _analysisCts.Token).ConfigureAwait(true);
+            _analyses[finding.Id] = new AiAnalysisViewModel(analysis);
+            AnalysisMessage = string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            AnalysisMessage = "AI analysis canceled.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or System.Text.Json.JsonException)
+        {
+            AnalysisMessage = "AI analysis failed: " + ex.Message;
+        }
+        finally
+        {
+            _analysisCts?.Dispose();
+            _analysisCts = null;
+            IsAnalyzing = false;
+            OnPropertyChanged(nameof(CurrentAnalysis));
+            OnPropertyChanged(nameof(HasCurrentAnalysis));
+        }
     }
 
     public override PageKey Key => PageKey.Findings;
@@ -83,7 +155,15 @@ public sealed class FindingsViewModel : PageViewModel
     public FindingItemViewModel? SelectedFinding
     {
         get => _selected;
-        set { if (SetProperty(ref _selected, value)) OnPropertyChanged(nameof(HasSelectedFinding)); }
+        set
+        {
+            if (!SetProperty(ref _selected, value)) return;
+            OnPropertyChanged(nameof(HasSelectedFinding));
+            OnPropertyChanged(nameof(CurrentAnalysis));
+            OnPropertyChanged(nameof(HasCurrentAnalysis));
+            if (!IsAnalyzing) AnalysisMessage = string.Empty;
+            AnalyzeCommand.RaiseCanExecuteChanged();
+        }
     }
 
     public bool HasSelectedFinding => SelectedFinding is not null;
@@ -110,6 +190,7 @@ public sealed class FindingsViewModel : PageViewModel
         ArgumentNullException.ThrowIfNull(report);
         _report = report;
         _all = report.Findings;
+        _analyses.Clear();
         Summary = SeveritySummary.From(_all);
         EngineRuns.Clear();
         foreach (var run in report.Engines) EngineRuns.Add(new EngineRunViewModel(run));
@@ -175,35 +256,97 @@ public sealed class AiAnalystViewModel : PageViewModel
 {
     private readonly IAiSecurityAnalyst _analyst;
     private readonly IMcpServerHost _mcp;
+    private readonly ScanWorkspaceViewModel? _workspace;
+    private readonly IClipboardService? _clipboard;
+    private string _copyMessage = string.Empty;
 
-    public AiAnalystViewModel(IAiSecurityAnalyst analyst, IMcpServerHost mcp)
+    public AiAnalystViewModel(IAiSecurityAnalyst analyst, IMcpServerHost mcp, ScanWorkspaceViewModel? workspace = null, IClipboardService? clipboard = null)
     {
         _analyst = analyst;
         _mcp = mcp;
-        AnalystStatus = new EngineStatusViewModel("ai", analyst.DisplayName, "Local AI", "Explains why a finding is risky, finds similar cases and drafts patches. Never edits files.", "Phase 3");
-        McpStatus = new EngineStatusViewModel("mcp", "MCP Server (stdio, local)", "Tool interface", "Least-privilege tools scoped to the selected folder, with audit log and human approval.", "Phase 3");
+        _workspace = workspace;
+        _clipboard = clipboard;
+        AnalystStatus = new EngineStatusViewModel("ai", analyst.DisplayName, "Local AI",
+            "Explains why a finding is risky and drafts a fix you review. Open a finding and press Analyze with AI.", "Phase 3");
+        McpStatus = new EngineStatusViewModel("mcp", "MCP Server (stdio, local)", "Tool interface",
+            "Least-privilege tools scoped to one folder, with audit log; risky tools only with explicit --allow.", "Phase 3");
         Tools = mcp.Tools.Select(t => new McpToolViewModel(t)).ToArray();
+        ApprovableTools = McpToolCatalog.ApprovableTools.Select(t => new ToolApprovalViewModel(t, OnApprovalChanged)).ToArray();
+        CopyConfigCommand = new RelayCommand(() => Copy(ClientConfigJson, "MCP client config copied."), () => HasClientSetup);
+        CopyClaudeCommand = new RelayCommand(() => Copy(ClaudeCodeCommand, "Claude Code command copied."), () => HasClientSetup);
+        if (workspace is not null)
+        {
+            workspace.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(ScanWorkspaceViewModel.FolderPath) or nameof(ScanWorkspaceViewModel.IsFolderValid)) RaiseSetupChanged();
+            };
+        }
     }
 
     public override PageKey Key => PageKey.AiAnalyst;
     public override string Title => "AI Analyst";
-    public override string Subtitle => "Contextual analysis through MCP";
+    public override string Subtitle => "Local model analysis and MCP tools";
     public EngineStatusViewModel AnalystStatus { get; }
     public EngineStatusViewModel McpStatus { get; }
     public IReadOnlyList<McpToolViewModel> Tools { get; }
+    public IReadOnlyList<ToolApprovalViewModel> ApprovableTools { get; }
+    public ICommand CopyConfigCommand { get; }
+    public ICommand CopyClaudeCommand { get; }
+    public string CopyMessage { get => _copyMessage; private set => SetProperty(ref _copyMessage, value); }
+
+    private McpClientSetup? Setup => _workspace is { IsFolderValid: true } w
+        ? _mcp.GetClientSetup(w.FolderPath, ApprovableTools.Where(t => t.IsApproved).Select(t => t.Name).ToArray())
+        : null;
+
+    public bool HasClientSetup => Setup is { ExecutablePath.Length: > 0 };
+    public string ClientConfigJson => Setup?.ConfigJson ?? "Select a project folder first; the server is limited to that folder.";
+    public string ClaudeCodeCommand => Setup?.ClaudeCodeCommand ?? string.Empty;
 
     public IReadOnlyList<string> Guardrails { get; } =
     [
         "AI output is a hypothesis until a person validates it; it is never the sole basis for a malicious/safe verdict.",
-        "Secrets are redacted before any context reaches the model.",
-        "Runs on a local model (Ollama) by default. Nothing leaves the machine without explicit consent.",
-        "Patches are proposed, never applied automatically.",
+        "Secrets are redacted before any context reaches the model; scanned code is treated as untrusted data.",
+        "Only local AI endpoints (localhost) are accepted. Nothing is sent to a cloud model.",
+        "Patches are proposed, never applied. The MCP server cannot modify files and logs every call.",
     ];
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         AnalystStatus.Apply(await _analyst.GetStatusAsync(cancellationToken).ConfigureAwait(true));
         McpStatus.Apply(await _mcp.GetStatusAsync(cancellationToken).ConfigureAwait(true));
+        RaiseSetupChanged();
+    }
+
+    private void OnApprovalChanged() => RaiseSetupChanged();
+
+    private void RaiseSetupChanged()
+    {
+        OnPropertyChanged(nameof(HasClientSetup));
+        OnPropertyChanged(nameof(ClientConfigJson));
+        OnPropertyChanged(nameof(ClaudeCodeCommand));
+        (CopyConfigCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
+        (CopyClaudeCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
+    }
+
+    private void Copy(string text, string message)
+    {
+        if (_clipboard is null || string.IsNullOrEmpty(text)) return;
+        _clipboard.SetText(text);
+        CopyMessage = message;
+    }
+}
+
+/// <summary>Pre-approval of one gated MCP tool for the generated client configuration.</summary>
+public sealed class ToolApprovalViewModel(string name, Action changed) : ObservableObject
+{
+    private bool _isApproved;
+
+    public string Name { get; } = name;
+
+    public bool IsApproved
+    {
+        get => _isApproved;
+        set { if (SetProperty(ref _isApproved, value)) changed(); }
     }
 }
 
@@ -398,6 +541,9 @@ public sealed class SettingsViewModel : PageViewModel
     private bool _isDarkTheme;
     private bool _allowExternalIntelligence;
     private string _abuseChAuthKey = string.Empty;
+    private bool _aiEnabled;
+    private string _aiEndpoint = string.Empty;
+    private string _aiModel = string.Empty;
     private string _saveMessage = string.Empty;
 
     public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines)
@@ -432,6 +578,9 @@ public sealed class SettingsViewModel : PageViewModel
     public int Parallelism { get => _parallelism; set => SetProperty(ref _parallelism, value); }
     public bool AllowExternalIntelligence { get => _allowExternalIntelligence; set => SetProperty(ref _allowExternalIntelligence, value); }
     public string AbuseChAuthKey { get => _abuseChAuthKey; set => SetProperty(ref _abuseChAuthKey, value?.Trim() ?? string.Empty); }
+    public bool AiEnabled { get => _aiEnabled; set => SetProperty(ref _aiEnabled, value); }
+    public string AiEndpoint { get => _aiEndpoint; set => SetProperty(ref _aiEndpoint, value?.Trim() ?? string.Empty); }
+    public string AiModel { get => _aiModel; set => SetProperty(ref _aiModel, value?.Trim() ?? string.Empty); }
 
     /// <summary>Executable path (empty = auto-detect) and on/off switch per CLI engine.</summary>
     public ObservableCollection<EngineSettingViewModel> EngineSettings { get; } = [];
@@ -459,6 +608,12 @@ public sealed class SettingsViewModel : PageViewModel
             return;
         }
 
+        if (!Uri.TryCreate(AiEndpoint, UriKind.Absolute, out var aiUri) || !aiUri.IsLoopback)
+        {
+            SaveMessage = "AI endpoint must be a local URL such as " + AppSettings.DefaultAiEndpoint + ".";
+            return;
+        }
+
         var badPath = EngineSettings.FirstOrDefault(e => e.ExecutablePath.Length > 0 && !Path.IsPathFullyQualified(e.ExecutablePath));
         if (badPath is not null)
         {
@@ -478,6 +633,9 @@ public sealed class SettingsViewModel : PageViewModel
             MaxDegreeOfParallelism = Math.Clamp(Parallelism, 1, 16),
             AllowExternalIntelligence = AllowExternalIntelligence,
             AbuseChAuthKey = AbuseChAuthKey.Length == 0 ? null : AbuseChAuthKey,
+            AiEnabled = AiEnabled,
+            AiEndpoint = AiEndpoint,
+            AiModel = AiModel.Length == 0 ? null : AiModel,
             EngineExecutables = EngineSettings.Where(e => e.ExecutablePath.Length > 0)
                 .ToDictionary(e => e.Id, e => e.ExecutablePath, StringComparer.OrdinalIgnoreCase),
             DisabledEngines = EngineSettings.Where(e => !e.Enabled).Select(e => e.Id).ToArray(),
@@ -494,6 +652,9 @@ public sealed class SettingsViewModel : PageViewModel
         MaxHashMegabytesText = defaults.MaxHashMegabytes.ToString(CultureInfo.CurrentCulture);
         Parallelism = defaults.MaxDegreeOfParallelism;
         AllowExternalIntelligence = false;
+        AiEnabled = defaults.AiEnabled;
+        AiEndpoint = defaults.AiEndpoint;
+        AiModel = string.Empty;
         foreach (var engine in EngineSettings)
         {
             engine.ExecutablePath = string.Empty;
@@ -509,6 +670,9 @@ public sealed class SettingsViewModel : PageViewModel
         Parallelism = s.MaxDegreeOfParallelism;
         AllowExternalIntelligence = s.AllowExternalIntelligence;
         AbuseChAuthKey = s.AbuseChAuthKey ?? string.Empty;
+        AiEnabled = s.AiEnabled;
+        AiEndpoint = s.AiEndpoint;
+        AiModel = s.AiModel ?? string.Empty;
         EngineSettings.Clear();
         foreach (var engine in EngineCatalog.Engines.Where(e => !string.Equals(e.Id, "malware-hash", StringComparison.Ordinal)))
         {

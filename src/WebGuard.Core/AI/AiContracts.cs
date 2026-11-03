@@ -45,13 +45,29 @@ public static class McpToolCatalog
         new("propose_remediation", "Draft a fix; never applies it to files.", McpToolAccess.ReadOnly, false),
         new("save_security_finding", "Persist a validated, deduplicated finding.", McpToolAccess.WritesKnowledge, true),
     ];
+
+    /// <summary>Tools that need the Second Brain (Phase 4); the server does not list them yet.</summary>
+    public static IReadOnlySet<string> SecondBrainTools { get; } = new HashSet<string>(StringComparer.Ordinal) { "search_similar_findings", "save_security_finding" };
+
+    /// <summary>Approval-gated tools a person can pre-approve when registering the server with a client.</summary>
+    public static IReadOnlyList<string> ApprovableTools { get; } =
+        Tools.Where(t => t.RequiresHumanApproval && !SecondBrainTools.Contains(t.Name)).Select(t => t.Name).ToArray();
 }
 
-/// <summary>Hosts the local MCP server (stdio) that exposes <see cref="McpToolCatalog"/> to the AI runtime.</summary>
+/// <summary>How an MCP client launches the server for one project folder.</summary>
+/// <param name="ConfigJson">"mcpServers" JSON block for clients such as LM Studio, Claude Desktop or Cursor.</param>
+/// <param name="ClaudeCodeCommand">Equivalent <c>claude mcp add</c> command line.</param>
+public sealed record McpClientSetup(string ExecutablePath, IReadOnlyList<string> Arguments, string ConfigJson, string ClaudeCodeCommand);
+
+/// <summary>
+/// Hosts the local MCP server (stdio) that exposes <see cref="McpToolCatalog"/> to MCP clients. With stdio the client
+/// starts the server process, so the host's job is to validate the folder and describe how to launch it.
+/// </summary>
 public interface IMcpServerHost
 {
     IReadOnlyList<McpToolDescriptor> Tools { get; }
     Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken);
     Task StartAsync(string allowedRoot, CancellationToken cancellationToken);
     Task StopAsync(CancellationToken cancellationToken);
+    McpClientSetup GetClientSetup(string allowedRoot, IReadOnlyCollection<string> approvedTools);
 }

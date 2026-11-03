@@ -204,7 +204,21 @@ public sealed class McpToolViewModel(McpToolDescriptor tool)
         _ => "Writes knowledge",
     };
     public bool RequiresHumanApproval => tool.RequiresHumanApproval;
-    public StatusTone Tone => tool.Access == McpToolAccess.ReadOnly ? StatusTone.Success : StatusTone.Warning;
+    public bool NeedsSecondBrain => McpToolCatalog.SecondBrainTools.Contains(tool.Name);
+    public string Availability => NeedsSecondBrain ? "Phase 4" : RequiresHumanApproval ? "Needs --allow" : "Always on";
+    public StatusTone Tone => NeedsSecondBrain ? StatusTone.Info : tool.Access == McpToolAccess.ReadOnly ? StatusTone.Success : StatusTone.Warning;
+}
+
+/// <summary>An AI explanation of one finding. Always shown as an unverified hypothesis.</summary>
+public sealed class AiAnalysisViewModel(AiAnalysis analysis)
+{
+    public AiAnalysis Analysis { get; } = analysis;
+    public string Summary => Analysis.Summary;
+    public string WhyRisky => Analysis.WhyRisky;
+    public bool HasWhyRisky => !string.IsNullOrWhiteSpace(Analysis.WhyRisky);
+    public string? Remediation => Analysis.ProposedRemediation;
+    public bool HasRemediation => !string.IsNullOrWhiteSpace(Analysis.ProposedRemediation);
+    public string Footer => $"{Analysis.Model} · {Analysis.Confidence} confidence · {DisplayFormat.DateTime(Analysis.CreatedAtUtc)}";
 }
 
 /// <summary>Deterministic observation from the inventory. Not a finding: it only points to where the engines will look.</summary>

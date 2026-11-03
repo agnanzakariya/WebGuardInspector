@@ -1,13 +1,14 @@
-# WebGuard Inspector v0.3.0 — Local Source Security Workspace
+# WebGuard Inspector v0.4.0 — Local Source Security Workspace
 
 Aplikasi desktop Windows (WPF, .NET 10) untuk inspeksi keamanan source code secara lokal.
-v0.3 menyelesaikan **Phase 2**: setelah inventory + SHA-256, aplikasi menjalankan engine deteksi
-(Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup threat intelligence (OSV.dev, CISA KEV, MalwareBazaar, ThreatFox),
-lalu menampilkan hasilnya di halaman Findings.
+Setelah inventory + SHA-256, aplikasi menjalankan engine deteksi (Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup
+threat intelligence (OSV.dev, CISA KEV, MalwareBazaar, ThreatFox), lalu menampilkan hasilnya di halaman Findings (Phase 2).
+v0.4 menambahkan **Phase 3**: AI Analyst dengan model lokal yang menjelaskan finding, dan server **MCP** lokal agar agen AI
+(Claude Code, LM Studio, Cursor, …) bisa memakai tool WebGuard secara terbatas.
 
 > **Catatan:** engine adalah tool CLI eksternal yang harus di-install sendiri (lihat *Engine Phase 2*).
 > Engine yang tidak ter-install dilaporkan sebagai *Not installed* dan scan tetap berjalan.
-> AI/MCP (Phase 3) dan Second Brain (Phase 4) masih berupa interface.
+> AI Analyst butuh server model lokal (LM Studio/Ollama) — lihat *AI Analyst dan MCP*. Second Brain (Phase 4) masih berupa interface.
 
 ## Fitur
 
@@ -33,7 +34,10 @@ lalu menampilkan hasilnya di halaman Findings.
 | Findings: evidence ter-redaksi, CWE/CVE/GHSA, remediasi, status per engine | Implemented (Phase 2) |
 | OSV.dev package lookup, MalwareBazaar + ThreatFox hash lookup, cache lokal `intel-cache` | Implemented (Phase 2, opt-in) |
 | CISA KEV: finding dependency yang CVE-nya dieksploitasi aktif ditandai **KEV** dan dinaikkan ke Critical | Implemented (Phase 2, opt-in) |
-| `IAiSecurityAnalyst`, `IMcpServerHost`, `McpToolCatalog` (9 tools) | Interface (Phase 3) |
+| AI Analyst lokal (OpenAI-compatible: LM Studio, Ollama, llama.cpp): ringkasan, alasan risiko, usulan perbaikan per finding | Implemented (Phase 3) |
+| Konteks AI: cuplikan kode bernomor baris, secret diredaksi (`SourceRedactor`), hanya endpoint localhost | Implemented (Phase 3) |
+| Server MCP stdio `WebGuard.Mcp.exe`: 7 tool, scope satu folder, tool berisiko hanya dengan `--allow`, audit log | Implemented (Phase 3) |
+| Tool MCP `search_similar_findings`, `save_security_finding` | Phase 4 (Second Brain) |
 | `ISecondBrainRepository`, `ITextEmbeddingService` | Interface (Phase 4) |
 | Model `SecurityFinding`, `FindingFingerprint`, `SecretRedactor`, `ValidationStatus` | Implemented |
 
@@ -52,7 +56,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 43 tests
+.\build.ps1          # restore + build + 52 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -64,7 +68,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 43 tests
+PASS: 52 tests
 PASS: build and tests completed
 ```
 
@@ -89,18 +93,19 @@ dan *Dependency manifests*.
 src/
   WebGuard.Core          Domain model + semua kontrak (Scanning, Findings, Detection, Intelligence, AI, Knowledge, Reporting)
   WebGuard.Scanner       LocalFolderScanner, JsonReportExporter, InMemoryScanHistoryStore
-  WebGuard.Detection     PlannedSecurityEngine + SemgrepEngine, GitleaksEngine, OsvScannerEngine, YaraXEngine (stub)
-  WebGuard.Intelligence  PlannedVulnerabilityIntelligence, PlannedMalwareHashIntelligence (stub)
-  WebGuard.AI            PlannedAiSecurityAnalyst, PlannedMcpServerHost (stub)
+  WebGuard.Detection     SemgrepEngine, GitleaksEngine, OsvScannerEngine, YaraXEngine + rule bawaan
+  WebGuard.Intelligence  OSV.dev, CISA KEV, MalwareBazaar, ThreatFox, cache intelligence
+  WebGuard.AI            LocalAiSecurityAnalyst, OpenAiCompatibleClient, StdioMcpServerHost
+  WebGuard.Mcp           Server MCP stdio (WebGuard.Mcp.exe): McpServer, McpToolset, McpAuditLog
   WebGuard.Persistence   PlannedSecondBrainRepository (stub)
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (23 tests)
+  WebGuard.Tests         Test runner tanpa dependency (52 tests)
 ```
 
-Aturan dependency: semua project hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` adalah satu-satunya
-tempat implementasi dirangkai (`App.Compose`). ViewModel tidak mereferensikan WPF, sehingga logika UI diuji
+Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
+(`Program.cs`) adalah composition root yang merangkai implementasi. ViewModel tidak mereferensikan WPF, sehingga logika UI diuji
 oleh `WebGuard.Tests`.
 
 ## Engine Phase 2
@@ -120,14 +125,54 @@ Install engine yang diinginkan; aplikasi mendeteksi .exe otomatis dari PATH, Win
 Setiap engine berjalan berurutan setelah hashing dengan timeout 10 menit. Engine yang gagal dicatat di ringkasan
 (halaman Findings dan laporan JSON) tanpa membatalkan scan.
 
+## AI Analyst dan MCP (Phase 3)
+
+**AI Analyst** — menjelaskan satu finding: ringkasan, kenapa berisiko (atau kenapa mungkin false positive), dan usulan
+perbaikan. Hasil selalu ditandai *AI hypothesis — not verified*; tidak ada file yang diubah.
+
+1. Install [LM Studio](https://lmstudio.ai), unduh model chat (mis. model coder ~7B), lalu **Developer → Start Server**
+   (default `http://127.0.0.1:1234/v1`). Ollama juga bisa: `http://127.0.0.1:11434/v1`.
+2. Settings → *AI Analyst (local)*: endpoint dan model (kosong = model chat pertama yang dimuat).
+3. Findings → pilih finding → **Analyze with AI**.
+
+Hanya endpoint localhost yang diterima. Model menerima cuplikan kode di sekitar finding yang **sudah diredaksi**
+(token, password, private key, connection string) dan diberi instruksi bahwa kode adalah data tak tepercaya
+(pertahanan terhadap prompt injection di dalam kode yang dipindai). File biner tidak pernah dikirim.
+
+**Server MCP** — `WebGuard.Mcp.exe` (ikut di folder aplikasi) dijalankan oleh klien MCP lewat stdio:
+
+```text
+WebGuard.Mcp.exe --root <folder proyek> [--allow run_security_rules,lookup_vulnerability,lookup_malware_hash] [--audit-log <file>]
+```
+
+Halaman **AI Analyst** membuat konfigurasi `mcpServers` dan perintah `claude mcp add` untuk folder aktif.
+
+| Tool | Akses | Default |
+| --- | --- | --- |
+| `list_project_files`, `read_source_context`, `get_dependency_manifest`, `propose_remediation` | Read-only (konten diredaksi) | Aktif |
+| `run_security_rules` | Menjalankan engine yang di-allow-list | Hanya dengan `--allow` |
+| `lookup_vulnerability`, `lookup_malware_hash` | Lookup jaringan (juga butuh izin di Settings) | Hanya dengan `--allow` |
+| `search_similar_findings`, `save_security_finding` | Second Brain | Phase 4 |
+
+Semua path dibatasi ke `--root` (`..`, path absolut lain, dan symlink/junction ditolak). Setiap panggilan — termasuk
+yang ditolak — dicatat di `%LOCALAPPDATA%\WebGuardInspector\mcp-audit.jsonl`.
+
 ## Prinsip keamanan
 
 - Read-only: aplikasi tidak pernah mengeksekusi, memodifikasi, atau mengunggah file yang dipindai.
 - Berjalan sebagai user biasa (`asInvoker`), tanpa elevasi.
 - Lookup threat intelligence bersifat opt-in dan hanya boleh mengirim koordinat package atau SHA-256.
-- Output AI selalu ditandai sebagai hipotesis sampai divalidasi manusia.
+- Output AI selalu ditandai sebagai hipotesis sampai divalidasi manusia; AI hanya memakai model lokal.
+- Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.4.0** — Phase 3
+- `LocalAiSecurityAnalyst` + `OpenAiCompatibleClient` (LM Studio/Ollama/llama.cpp, hanya localhost), tombol *Analyze with AI* di Findings.
+- `FindingContextBuilder`, `SourceRedactor`, `ProjectScope` di Core: konteks bernomor baris, redaksi secret, scope folder.
+- Server MCP stdio `WebGuard.Mcp` (JSON-RPC 2.0, MCP 2025-06-18): 7 tool, approval via `--allow`, anotasi tool, audit log.
+- Halaman AI Analyst: status runtime, katalog tool, konfigurasi klien MCP + perintah Claude Code.
+- Status engine, AI dan intelligence dicek bersamaan saat aplikasi dibuka. 52 tests.
 
 **0.3.0** — Phase 2
 - Adapter Semgrep, Gitleaks, OSV-Scanner, YARA-X di atas `ExternalToolEngine` + `ExternalProcessRunner`.

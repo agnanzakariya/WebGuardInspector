@@ -28,6 +28,17 @@ public sealed record AppSettings
     /// <summary>abuse.ch Auth-Key for MalwareBazaar hash lookups, stored in the per-user settings file.</summary>
     public string? AbuseChAuthKey { get; init; }
 
+    /// <summary>AI analysis with a local OpenAI-compatible server (LM Studio, Ollama, llama.cpp).</summary>
+    public bool AiEnabled { get; init; } = true;
+
+    /// <summary>Loopback base URL of the local AI server.</summary>
+    public string AiEndpoint { get; init; } = DefaultAiEndpoint;
+
+    /// <summary>Model id; empty selects the first loaded chat model.</summary>
+    public string? AiModel { get; init; }
+
+    public const string DefaultAiEndpoint = "http://127.0.0.1:1234/v1";
+
     /// <summary>Engines that send data off the machine and therefore also require <see cref="AllowExternalIntelligence"/>.</summary>
     public static IReadOnlyCollection<string> NetworkEngines { get; } = ["osv-scanner"];
 

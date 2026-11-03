@@ -12,6 +12,7 @@
     <Project Path="src/WebGuard.Detection/WebGuard.Detection.csproj" />
     <Project Path="src/WebGuard.Intelligence/WebGuard.Intelligence.csproj" />
     <Project Path="src/WebGuard.AI/WebGuard.AI.csproj" />
+    <Project Path="src/WebGuard.Mcp/WebGuard.Mcp.csproj" />
     <Project Path="src/WebGuard.Persistence/WebGuard.Persistence.csproj" />
     <Project Path="src/WebGuard.Presentation/WebGuard.Presentation.csproj" />
     <Project Path="src/WebGuard.Desktop/WebGuard.Desktop.csproj" />

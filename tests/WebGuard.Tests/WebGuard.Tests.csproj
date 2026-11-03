@@ -16,5 +16,6 @@
     <ProjectReference Include="..\..\src\WebGuard.AI\WebGuard.AI.csproj" />
     <ProjectReference Include="..\..\src\WebGuard.Intelligence\WebGuard.Intelligence.csproj" />
     <ProjectReference Include="..\..\src\WebGuard.Persistence\WebGuard.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\WebGuard.Mcp\WebGuard.Mcp.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Local MCP server (stdio) exposing WebGuard's least-privilege tools to MCP clients such as Claude Code or LM Studio.
+       It is a separate composition root: started by the MCP client with an explicit project folder. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>WebGuard.Mcp</RootNamespace>
+    <AssemblyName>WebGuard.Mcp</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WebGuard.Core\WebGuard.Core.csproj" />
+    <ProjectReference Include="..\WebGuard.Scanner\WebGuard.Scanner.csproj" />
+    <ProjectReference Include="..\WebGuard.Detection\WebGuard.Detection.csproj" />
+    <ProjectReference Include="..\WebGuard.Intelligence\WebGuard.Intelligence.csproj" />
+    <ProjectReference Include="..\WebGuard.AI\WebGuard.AI.csproj" />
+    <ProjectReference Include="..\WebGuard.Presentation\WebGuard.Presentation.csproj" />
+  </ItemGroup>
+</Project>

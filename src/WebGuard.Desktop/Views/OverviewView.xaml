@@ -102,11 +102,12 @@
             <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" Foreground="{DynamicResource Brush.Primary}"/>
             <TextBlock Text="AI Analyst" Style="{StaticResource Text.Section}" Margin="10,0,0,0"/>
           </StackPanel>
-          <Button HorizontalAlignment="Right" Style="{StaticResource Button.Secondary}" Padding="10,5" IsEnabled="False"
-                  ToolTip="Local AI analysis via MCP arrives in Phase 3">
+          <Button HorizontalAlignment="Right" Style="{StaticResource Button.Secondary}" Padding="10,5"
+                  Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="AiAnalyst"
+                  ToolTip="Local model analysis and MCP tools">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="12"/>
-              <TextBlock Text="Analyze Project" Margin="6,0,0,0" FontSize="12"/>
+              <TextBlock Text="Open AI Analyst" Margin="6,0,0,0" FontSize="12"/>
             </StackPanel>
           </Button>
         </Grid>
@@ -114,7 +115,7 @@
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
           <Grid>
             <ItemsControl ItemsSource="{Binding Workspace.Insights}" ItemTemplate="{StaticResource InsightTemplate}"/>
-            <TextBlock Text="Run a scan to see which areas deserve attention. Engine findings are on the Findings page; AI recommendations arrive in Phase 3."
+            <TextBlock Text="Run a scan to see which areas deserve attention. Engine findings are on the Findings page, where each one can be explained by the local AI analyst."
                        Style="{StaticResource Text.Wrap}" FontSize="12"
                        Visibility="{Binding Workspace.HasNoReport, Converter={StaticResource BoolToVisibility}}"/>
           </Grid>

@@ -211,6 +211,47 @@
             <TextBlock Text="{Binding Remediation}" Style="{StaticResource Text.Wrap}"/>
           </Border>
 
+          <!-- AI analysis of this finding (page-level state, so it uses the page's DataContext). -->
+          <StackPanel DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,18,0,0"
+                      Visibility="{Binding HasAnalyst, Converter={StaticResource BoolToVisibility}}">
+            <Grid>
+              <TextBlock Text="AI ANALYST" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource Button.Secondary}" Content="Cancel" Command="{Binding CancelAnalysisCommand}" Padding="10,5" Margin="0,0,8,0"
+                        Visibility="{Binding IsAnalyzing, Converter={StaticResource BoolToVisibility}}"/>
+                <Button Style="{StaticResource Button.Primary}" Command="{Binding AnalyzeCommand}" Padding="12,5"
+                        ToolTip="Explain this finding with the local model. Secrets are redacted; nothing is changed.">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
+                    <TextBlock Text="Analyze with AI" Margin="6,0,0,0" FontSize="12"/>
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+            <ProgressBar IsIndeterminate="True" Height="4" Margin="0,10,0,0"
+                         Visibility="{Binding IsAnalyzing, Converter={StaticResource BoolToVisibility}}"/>
+            <TextBlock Text="{Binding AnalysisMessage}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,8,0,0"/>
+            <StackPanel DataContext="{Binding CurrentAnalysis}" Margin="0,8,0,0"
+                        Visibility="{Binding DataContext.HasCurrentAnalysis, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+              <Border Style="{StaticResource Inset}" Background="{DynamicResource Brush.WarningSoft}">
+                <TextBlock Text="AI hypothesis — not verified. Validate before acting; nothing was changed." Style="{StaticResource Text.Base}"
+                           Foreground="{DynamicResource Brush.Warning}" TextWrapping="Wrap"/>
+              </Border>
+              <TextBlock Text="{Binding Summary}" Style="{StaticResource Text.Wrap}" FontWeight="SemiBold" Margin="0,10,0,0"/>
+              <TextBlock Text="WHY IT MATTERS" Style="{StaticResource Text.Label}" Margin="0,10,0,4"
+                         Visibility="{Binding HasWhyRisky, Converter={StaticResource BoolToVisibility}}"/>
+              <TextBlock Text="{Binding WhyRisky}" Style="{StaticResource Text.Wrap}"
+                         Visibility="{Binding HasWhyRisky, Converter={StaticResource BoolToVisibility}}"/>
+              <TextBlock Text="PROPOSED FIX (review before applying)" Style="{StaticResource Text.Label}" Margin="0,10,0,4"
+                         Visibility="{Binding HasRemediation, Converter={StaticResource BoolToVisibility}}"/>
+              <Border Style="{StaticResource Inset}" Visibility="{Binding HasRemediation, Converter={StaticResource BoolToVisibility}}">
+                <TextBox Text="{Binding Remediation, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+                         Padding="0" FontFamily="{StaticResource Font.Code}" FontSize="12"/>
+              </Border>
+              <TextBlock Text="{Binding Footer}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </StackPanel>
+
           <Border Style="{StaticResource Inset}" Margin="0,14,0,0" Background="{DynamicResource Brush.WarningSoft}"
                   Visibility="{Binding IsAiHypothesis, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Text="AI hypothesis — not verified. Validate before acting." Style="{StaticResource Text.Base}" Foreground="{DynamicResource Brush.Warning}"/>
