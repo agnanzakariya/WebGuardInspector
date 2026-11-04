@@ -24,6 +24,12 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) => NativeMethods.SetDarkTitleBar(this, _theme.Current == AppTheme.Dark);
         Title = $"{shell.AppName} {shell.VersionText}";
         FitToWorkArea(SystemParameters.WorkArea);
+        // While the setup wizard is open the app's shortcuts (F5 scan, Ctrl+O/E/F) must not reach the pages behind it.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (shell.IsSetupRequired && (e.Key is Key.F5 || Keyboard.Modifiers == ModifierKeys.Control && e.Key is Key.O or Key.E or Key.F))
+                e.Handled = true;
+        };
     }
 
     /// <summary>

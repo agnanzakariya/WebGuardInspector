@@ -45,6 +45,9 @@ public sealed record AppSettings
     /// <summary>Record every scan and AI analysis automatically.</summary>
     public bool SecondBrainAutoRecord { get; init; } = true;
 
+    /// <summary>True once the first-run setup wizard was finished; until then the app shows only the wizard.</summary>
+    public bool SetupCompleted { get; init; }
+
     /// <summary>Fixing findings with the Claude Code CLI under the user's own Claude login.</summary>
     public bool ClaudeFixEnabled { get; init; } = true;
 

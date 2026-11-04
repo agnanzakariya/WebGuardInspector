@@ -51,7 +51,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         SettingsViewModel settingsPage,
         EngineCatalogViewModel engines,
         SettingsService settings,
-        IThemeService theme)
+        IThemeService theme,
+        SetupWizardViewModel? setup = null)
     {
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(settingsPage);
@@ -97,7 +98,37 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             await Engines.RefreshAsync().ConfigureAwait(true);
         };
         settings.Changed += (_, _) => OnPropertyChanged(nameof(IsDarkTheme));
+
+        Setup = setup;
+        if (setup is not null)
+        {
+            setup.Completed += async (_, _) =>
+            {
+                OnPropertyChanged(nameof(IsSetupRequired));
+                settingsPage.Reload();
+                _theme.Apply(_settings.Current.Theme);
+                OnPropertyChanged(nameof(IsDarkTheme));
+                scanner.RefreshPolicy();
+                await intelligence.RefreshAsync().ConfigureAwait(true);
+                await ai.RefreshAsync().ConfigureAwait(true);
+                await fixing.RefreshAsync().ConfigureAwait(true);
+                await secondBrain.RefreshAsync().ConfigureAwait(true);
+                await Engines.RefreshAsync().ConfigureAwait(true);
+            };
+            settingsPage.SetupRequested += (_, _) =>
+            {
+                _settings.Update(s => s with { SetupCompleted = false });
+                setup.Reset();
+                OnPropertyChanged(nameof(IsSetupRequired));
+            };
+        }
     }
+
+    /// <summary>First-run setup wizard; null when the host does not use one (tests).</summary>
+    public SetupWizardViewModel? Setup { get; }
+
+    /// <summary>The wizard covers the whole window until it is finished.</summary>
+    public bool IsSetupRequired => Setup is not null && !_settings.Current.SetupCompleted;
 
     public string AppName => AppInfo.Name;
     public string AppBrand => AppInfo.Brand;

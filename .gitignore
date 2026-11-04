@@ -8,3 +8,6 @@
 reports/
 *.json.tmp
 TestResults/
+
+# Installer build output
+installer/out/

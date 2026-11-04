@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+        xmlns:views="clr-namespace:WebGuard.Desktop.Views"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:ShellViewModel}"
         Title="Azura — WebGuard Inspector" Icon="Assets/azura.ico" Width="1480" Height="920" MinWidth="1240" MinHeight="760"
@@ -115,5 +116,9 @@
 
       <ContentControl x:Name="PageHost" Grid.Row="1" Margin="24,12,20,20" Content="{Binding CurrentPage}" Focusable="False"/>
     </Grid>
+
+    <!-- First-run setup: covers the whole window until it is finished. -->
+    <views:SetupWizardView Grid.ColumnSpan="2" DataContext="{Binding Setup}"
+                           Visibility="{Binding DataContext.IsSetupRequired, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"/>
   </Grid>
 </Window>

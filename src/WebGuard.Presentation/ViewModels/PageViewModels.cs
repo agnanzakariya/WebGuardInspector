@@ -689,6 +689,7 @@ public sealed class SettingsViewModel : PageViewModel
         EngineCatalog = engines;
         SaveCommand = new RelayCommand(Save);
         ResetCommand = new RelayCommand(Reset);
+        RunSetupCommand = new RelayCommand(() => SetupRequested?.Invoke(this, EventArgs.Empty));
         LoadFrom(settings.Current);
         settings.Changed += (_, _) =>
         {
@@ -705,6 +706,13 @@ public sealed class SettingsViewModel : PageViewModel
     public EngineCatalogViewModel EngineCatalog { get; }
     public ICommand SaveCommand { get; }
     public ICommand ResetCommand { get; }
+
+    /// <summary>Opens the first-run setup wizard again.</summary>
+    public ICommand RunSetupCommand { get; }
+    public event EventHandler? SetupRequested;
+
+    /// <summary>Shows the saved settings again (after the setup wizard changed them).</summary>
+    public void Reload() => LoadFrom(_settings.Current);
     public IReadOnlyList<int> ParallelismOptions { get; } = [1, 2, 4, 8];
     public string SettingsFile => JsonSettingsStore.DefaultPath;
 

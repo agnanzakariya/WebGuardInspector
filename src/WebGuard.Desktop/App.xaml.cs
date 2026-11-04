@@ -97,6 +97,7 @@ public partial class App : Application
             () => new ClaudeCodeSettings(settings.Current.ClaudeFixEnabled, settings.Current.ClaudeCliPath, settings.Current.ClaudeModel),
             () => ExecutableLocator.Find(["claude"]));
         var fixing = new FixingViewModel(findings, fixer, new FixApplier(FixApplier.DefaultBackupRoot), secondBrain, settings);
+        var setup = new SetupWizardViewModel(settings, theme, catalog, analyst, fixer, secondBrain, folderPicker);
 
         return new ShellViewModel(
             workspace,
@@ -111,7 +112,8 @@ public partial class App : Application
             new SettingsViewModel(settings, theme, catalog, folderPicker),
             catalog,
             settings,
-            theme);
+            theme,
+            setup);
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.6.1
+# Azura — WebGuard Inspector v0.7.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -51,6 +51,39 @@ diff-nya, lalu Apply dengan backup dan Undo. Temuan yang dinilai false positive 
 | Fixing: usulan perbaikan dari Claude Code CLI, diff, Apply dengan backup, Undo, saran false positive | Implemented (v0.6) |
 | Model `SecurityFinding`, `FindingFingerprint`, `SecretRedactor`, `ValidationStatus` | Implemented |
 
+## Instalasi (Setup.exe)
+
+Unduh/jalankan `Azura-WebGuard-Inspector-Setup-<versi>.exe` (~70 MB). Installer:
+
+- memasang aplikasi **self-contained** (runtime .NET 10 ikut; PC tujuan tidak perlu .NET) ke
+  `%LOCALAPPDATA%\Programs\Azura WebGuard Inspector` tanpa hak administrator (dialog Setup juga menawarkan *all users*);
+- menyertakan **Gitleaks, OSV-Scanner dan YARA-X** (`tools\`, lisensi di `tools\licenses`) sehingga langsung jalan offline;
+- menawarkan centang untuk memasang secara online: **Semgrep** (Python 3 via winget bila belum ada, lalu `pip install --user
+  semgrep`; tercentang default), **Claude Code CLI**, **Obsidian**, **LM Studio**. Prosesnya tampil di jendela konsol dan
+  dicatat di `%LOCALAPPDATA%\WebGuardInspector\logs\install-deps.log`; bisa diulang lewat Start Menu →
+  *Install or repair dependencies*;
+- membuat shortcut Start Menu (dan Desktop bila dipilih) serta uninstaller di Apps & Features. Uninstall tidak menghapus
+  settings, backup Fixing maupun vault.
+
+### Wizard first-run (wajib)
+
+Saat pertama dibuka, Azura hanya menampilkan wizard 8 langkah sampai selesai: Welcome → Security engines (status tiap
+engine) → Privacy (lookup online atau offline saja, abuse.ch key) → Local AI → Claude fixing → Second Brain → Preferences
+(tema, paralelisme, folder yang dikecualikan) → ringkasan. Setiap fitur opsional harus dijawab *Use it* / *Don't use*;
+isian divalidasi (endpoint AI harus lokal, vault harus ada, path claude.exe harus .exe). Nilai tiap langkah disimpan saat
+lanjut, dan wizard dianggap selesai hanya setelah **Finish** — menutup aplikasi di tengah jalan akan menampilkannya lagi.
+Wizard bisa diulang dari **Settings → Run setup wizard**.
+
+### Membangun installer
+
+```powershell
+winget install JRSoftware.InnoSetup      # sekali saja
+.\installer\build-installer.ps1           # tests, publish self-contained, bundel engine, compile azura.iss
+# hasil: installer\out\Azura-WebGuard-Inspector-Setup-<versi>.exe
+```
+
+Engine bawaan diambil dari PATH/WinGet di PC build (atau `-ToolsDir <folder>`).
+
 ## Persyaratan
 
 - Windows 11, Visual Studio Community 2026 dengan workload **.NET desktop development**
@@ -66,7 +99,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 70 tests
+.\build.ps1          # restore + build + 73 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -78,7 +111,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 70 tests
+PASS: 73 tests
 PASS: build and tests completed
 ```
 
@@ -111,7 +144,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (70 tests)
+  WebGuard.Tests         Test runner tanpa dependency (73 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -244,6 +277,12 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.7.0** — Installer dan wizard first-run
+- `installer\build-installer.ps1` + `azura.iss` (Inno Setup 6): Setup.exe self-contained win-x64, engine Gitleaks/OSV-Scanner/YARA-X
+  dibundel beserta lisensinya, dependencies opsional (Semgrep, Claude Code, Obsidian, LM Studio) lewat `install-deps.ps1`.
+- Wizard first-run wajib 8 langkah (`SetupWizardViewModel`), bisa diulang dari Settings; shortcut aplikasi diblokir selama wizard tampil.
+- Diuji: install silent per-user, aplikasi terpasang berjalan (5/5 engine siap), uninstall bersih. 73 tests.
 
 **0.6.1** — Rule PHP, nama dan ikon Azura
 - Aplikasi bernama **Azura** (sub: WebGuard Inspector) dengan logo ksatria; ikon dipakai untuk exe, jendela, taskbar dan `WebGuard.Mcp.exe`.
