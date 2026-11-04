@@ -66,7 +66,7 @@ Source: "install-deps.ps1"; DestDir: "{app}\setup"; Flags: ignoreversion
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{group}\{cm:RepairDeps}"; Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\setup\install-deps.ps1"" -Semgrep -ClaudeCode"; WorkingDir: "{app}\setup"
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\setup\install-deps.ps1"" -Semgrep -ClamAV -ClaudeCode"; WorkingDir: "{app}\setup"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

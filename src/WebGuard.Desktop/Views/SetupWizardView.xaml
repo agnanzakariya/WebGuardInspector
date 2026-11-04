@@ -111,7 +111,7 @@
               <!-- 2 Engines -->
               <StackPanel Visibility="{Binding IsEngines, Converter={StaticResource BoolToVisibility}}" MaxWidth="760" HorizontalAlignment="Left">
                 <TextBlock Style="{StaticResource Text.Wrap}"
-                           Text="Gitleaks, OSV-Scanner and YARA-X ship with the installer. Semgrep needs Python and is installed by the installer when you selected it. Engines that are not ready are skipped and reported; you can set their paths in Settings later."/>
+                           Text="Gitleaks, OSV-Scanner and YARA-X ship with the installer. Semgrep (needs Python) and ClamAV (antivirus, needs administrator rights) are installed by Setup when you ticked them; otherwise use Start menu → Install or repair dependencies, or winget install Cisco.ClamAV. ClamAV also needs its signature database: download it in Settings → Components. Engines that are not ready are skipped and reported; you can set their paths in Settings later."/>
                 <Grid Margin="0,14,0,8">
                   <TextBlock Text="{Binding EngineCatalog.Summary}" Style="{StaticResource Text.Base}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                   <Button Style="{StaticResource Button.Secondary}" Content="Check again" Command="{Binding RefreshEnginesCommand}" Padding="12,5" HorizontalAlignment="Right"/>

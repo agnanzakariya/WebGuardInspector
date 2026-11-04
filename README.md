@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.10.0
+# Azura — WebGuard Inspector v0.10.1
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -319,6 +319,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.10.1** — Shortcut *Install or repair dependencies* kini juga memasang ClamAV (+ signature); langkah Security engines di wizard menjelaskan Semgrep dan ClamAV.
 
 **0.10.0** — ClamAV
 - Engine `ClamAvEngine`: ClamAV memindai semua file hasil inventory (`--file-list` tanpa BOM, batas 100 MB per file); deteksi menjadi
