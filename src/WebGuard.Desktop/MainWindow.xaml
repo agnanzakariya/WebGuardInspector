@@ -93,8 +93,22 @@
           <TextBlock Text="{Binding CurrentPage.Title}" Style="{StaticResource Text.PageTitle}"/>
           <TextBlock Text="{Binding CurrentPage.Subtitle}" Style="{StaticResource Text.Secondary}"/>
         </StackPanel>
-        <TextBlock Grid.Column="1" Text="Scan  ·  Analyze  ·  Understand  ·  Build Safer" Style="{StaticResource Text.Caption}"
-                   VerticalAlignment="Center" Margin="0,0,16,0"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+          <Button Command="{Binding OpenUpdateCommand}" Margin="0,0,16,0" Cursor="Hand" ToolTip="Open Settings: Updates"
+                  Visibility="{Binding About.IsUpdateAvailable, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border Background="{DynamicResource Brush.InfoSoft}" CornerRadius="{StaticResource Radius.Pill}" Padding="10,3">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE896;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{DynamicResource Brush.Info}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding About.UpdateBadge}" Foreground="{DynamicResource Brush.Info}" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0"/>
+                  </StackPanel>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+          <TextBlock Text="Scan  &#xB7;  Analyze  &#xB7;  Understand  &#xB7;  Build Safer" Style="{StaticResource Text.Caption}" VerticalAlignment="Center"/>
+        </StackPanel>
         <Button Grid.Column="2" Style="{StaticResource Button.Icon}" Command="{Binding ToggleThemeCommand}" FontSize="16"
                 ToolTip="Toggle dark / light theme" AutomationProperties.Name="Toggle theme" VerticalAlignment="Center">
           <Button.Content>

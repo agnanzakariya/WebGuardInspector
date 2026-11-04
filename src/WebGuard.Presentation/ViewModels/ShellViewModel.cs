@@ -98,6 +98,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             await Engines.RefreshAsync().ConfigureAwait(true);
         };
         settings.Changed += (_, _) => OnPropertyChanged(nameof(IsDarkTheme));
+        About = settingsPage.About;
+        OpenUpdateCommand = new RelayCommand(() => Navigate(PageKey.Settings));
 
         Setup = setup;
         if (setup is not null)
@@ -114,6 +116,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
                 await fixing.RefreshAsync().ConfigureAwait(true);
                 await secondBrain.RefreshAsync().ConfigureAwait(true);
                 await Engines.RefreshAsync().ConfigureAwait(true);
+                if (About is not null) await About.CheckOnStartupAsync().ConfigureAwait(true);
             };
             settingsPage.SetupRequested += (_, _) =>
             {
@@ -123,6 +126,10 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             };
         }
     }
+
+    /// <summary>Updates/About (shared with the Settings page); the top bar shows its update notice.</summary>
+    public AboutViewModel? About { get; }
+    public ICommand OpenUpdateCommand { get; }
 
     /// <summary>First-run setup wizard; null when the host does not use one (tests).</summary>
     public SetupWizardViewModel? Setup { get; }
@@ -175,6 +182,12 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             Page<FixingViewModel>().RefreshAsync(),
             Page<SecondBrainViewModel>().RefreshAsync(),
             Page<IntelligenceViewModel>().RefreshAsync()).ConfigureAwait(true);
+        if (About is not null)
+        {
+            await About.RefreshComponentsAsync().ConfigureAwait(true);
+            // Not during first-run setup: the person has not yet decided whether update checks are allowed.
+            if (!IsSetupRequired) await About.CheckOnStartupAsync().ConfigureAwait(true);
+        }
     }
 
     public void Dispose()

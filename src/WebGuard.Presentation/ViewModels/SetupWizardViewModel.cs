@@ -50,6 +50,7 @@ public sealed class SetupWizardViewModel : ObservableObject
     private string _validationMessage = string.Empty;
     private string? _intelChoice;
     private string _abuseChKey = string.Empty;
+    private bool _checkUpdates;
     private string? _aiChoice;
     private string _aiEndpoint = string.Empty;
     private string _aiModel = string.Empty;
@@ -164,6 +165,9 @@ public sealed class SetupWizardViewModel : ObservableObject
     public bool UsesOnlineLookups => IntelChoice == OnlineLookups;
     public string AbuseChKey { get => _abuseChKey; set => SetProperty(ref _abuseChKey, value?.Trim() ?? string.Empty); }
 
+    /// <summary>Look for new versions on GitHub at start-up (only release metadata is requested).</summary>
+    public bool CheckUpdates { get => _checkUpdates; set => SetProperty(ref _checkUpdates, value); }
+
     // ---- Local AI ------------------------------------------------------------------------------------------------
 
     public string? AiChoice
@@ -246,6 +250,7 @@ public sealed class SetupWizardViewModel : ObservableObject
         new("Online intelligence", UsesOnlineLookups
             ? "On" + (AbuseChKey.Length > 0 ? " · abuse.ch key set" : " · no abuse.ch key (MalwareBazaar/ThreatFox off)")
             : "Off · nothing leaves this PC"),
+        new("Update check", CheckUpdates ? "Daily at start-up (GitHub Releases)" : "Manual only (Settings → Updates)"),
         new("Local AI analyst", UsesAi ? $"On · {AiEndpoint}{(AiModel.Length > 0 ? " · " + AiModel : string.Empty)}" : "Off"),
         new("Claude fixing", UsesClaude ? "On" + (ClaudeModel.Length > 0 ? " · model " + ClaudeModel : string.Empty) : "Off"),
         new("Second Brain", UsesVault ? VaultPath + (AutoRecord ? " · records automatically" : " · manual") : "Off"),
@@ -258,6 +263,7 @@ public sealed class SetupWizardViewModel : ObservableObject
         var s = _settings.Current;
         IntelChoice = null;
         AbuseChKey = s.AbuseChAuthKey ?? string.Empty;
+        CheckUpdates = s.CheckForUpdates;
         AiChoice = null;
         AiEndpoint = s.AiEndpoint;
         AiModel = s.AiModel ?? string.Empty;
@@ -323,7 +329,12 @@ public sealed class SetupWizardViewModel : ObservableObject
         switch (step)
         {
             case SetupStep.Privacy:
-                _settings.Update(s => s with { AllowExternalIntelligence = UsesOnlineLookups, AbuseChAuthKey = AbuseChKey.Length == 0 ? null : AbuseChKey });
+                _settings.Update(s => s with
+                {
+                    AllowExternalIntelligence = UsesOnlineLookups,
+                    AbuseChAuthKey = AbuseChKey.Length == 0 ? null : AbuseChKey,
+                    CheckForUpdates = CheckUpdates,
+                });
                 break;
             case SetupStep.AiAnalyst:
                 _settings.Update(s => s with

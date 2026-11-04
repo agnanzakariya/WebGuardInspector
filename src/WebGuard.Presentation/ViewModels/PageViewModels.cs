@@ -677,8 +677,10 @@ public sealed class SettingsViewModel : PageViewModel
     private string _claudeCliPath = string.Empty;
     private string _claudeModel = string.Empty;
 
-    public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines, IFolderPicker? folderPicker = null)
+    public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines, IFolderPicker? folderPicker = null,
+        AboutViewModel? about = null)
     {
+        About = about;
         _folderPicker = folderPicker;
         BrowseVaultCommand = new RelayCommand(() =>
         {
@@ -706,6 +708,10 @@ public sealed class SettingsViewModel : PageViewModel
     public EngineCatalogViewModel EngineCatalog { get; }
     public ICommand SaveCommand { get; }
     public ICommand ResetCommand { get; }
+
+    /// <summary>Updates and About; null when the host does not provide them (tests).</summary>
+    public AboutViewModel? About { get; }
+    public bool HasAbout => About is not null;
 
     /// <summary>Opens the first-run setup wizard again.</summary>
     public ICommand RunSetupCommand { get; }

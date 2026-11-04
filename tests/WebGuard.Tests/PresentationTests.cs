@@ -27,6 +27,8 @@ internal sealed class FakeDialogs : IDialogService
     public List<string> Errors { get; } = [];
     public void ShowError(string title, string message) => Errors.Add(message);
     public void ShowInfo(string title, string message) { }
+    public bool ConfirmAnswer { get; set; } = true;
+    public bool Confirm(string title, string message) => ConfirmAnswer;
 }
 
 internal sealed class FakeTheme : IThemeService

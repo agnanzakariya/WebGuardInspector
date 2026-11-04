@@ -11,7 +11,7 @@
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="420"/>
+        <ColumnDefinition Width="460"/>
       </Grid.ColumnDefinitions>
       <StackPanel Margin="0,0,12,0">
         <Border Style="{StaticResource Card}">
@@ -118,7 +118,167 @@
           <Run Text="Settings file: "/><Run Text="{Binding SettingsFile, Mode=OneWay}" FontFamily="{StaticResource Font.Code}"/>
         </TextBlock>
       </StackPanel>
-      <Border Grid.Column="1" Style="{StaticResource Card}" VerticalAlignment="Top">
+      <StackPanel Grid.Column="1">
+      <!-- Updates -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,12" DataContext="{Binding About}"
+              Visibility="{Binding DataContext.HasAbout, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <Grid>
+            <TextBlock Text="UPDATES" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+            <Button Style="{StaticResource Button.Secondary}" Content="Check now" Command="{Binding CheckNowCommand}" Padding="12,4" HorizontalAlignment="Right"/>
+          </Grid>
+          <Border Style="{StaticResource Pill.Tone}" HorizontalAlignment="Stretch" CornerRadius="{StaticResource Radius.Control}" Padding="12,8" Margin="0,10,0,0">
+            <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Text.Wrap}"/>
+          </Border>
+          <TextBlock Text="{Binding LastCheckedText}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0"/>
+          <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AutoCheck, Mode=TwoWay}" Margin="0,10,0,0"
+                    Content="Check GitHub when Azura starts (once a day)"/>
+          <StackPanel Visibility="{Binding HasReleaseNotes, Converter={StaticResource BoolToVisibility}}" Margin="0,12,0,0">
+            <TextBlock Text="{Binding ReleaseTitle}" Style="{StaticResource Text.Base}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <Border Style="{StaticResource Inset}" Margin="0,6,0,0" MaxHeight="180">
+              <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBlock Text="{Binding ReleaseNotes}" Style="{StaticResource Text.Wrap}" FontSize="12"/>
+              </ScrollViewer>
+            </Border>
+            <TextBlock Text="{Binding InstallHint}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,6,0,0" FontFamily="{StaticResource Font.Code}"/>
+            <ProgressBar Height="4" Margin="0,8,0,0" Minimum="0" Maximum="1" Value="{Binding Progress}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+              <Button Style="{StaticResource Button.Primary}" Content="Download &amp; install" Command="{Binding InstallUpdateCommand}" Padding="14,6"
+                      ToolTip="Downloads the installer from GitHub, verifies its SHA-256 and runs it after you confirm"/>
+              <Button Style="{StaticResource Button.Secondary}" Content="Release page" Command="{Binding OpenReleaseCommand}" Padding="12,6" Margin="8,0,0,0"/>
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- About -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,12" DataContext="{Binding About}"
+              Visibility="{Binding DataContext.HasAbout, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <TextBlock Text="ABOUT" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
+          <StackPanel Orientation="Horizontal">
+            <Image Source="../Assets/azura-128.png" Width="56" Height="56" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Brand}" Style="{StaticResource Text.Section}" FontSize="20"/>
+              <TextBlock Text="{Binding Product}" Style="{StaticResource Text.Secondary}"/>
+              <TextBlock Text="{Binding VersionText}" Style="{StaticResource Text.Caption}"/>
+            </StackPanel>
+          </StackPanel>
+          <TextBlock Text="{Binding Description}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,12,0,0"/>
+          <TextBlock Style="{StaticResource Text.Caption}" Margin="0,8,0,0">
+            <Run Text="By "/><Run Text="{Binding Author, Mode=OneWay}"/>
+          </TextBlock>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Style="{StaticResource Button.Secondary}" Content="GitHub" Command="{Binding OpenRepositoryCommand}" Padding="12,4"
+                    ToolTip="{Binding Repository}"/>
+            <Button Style="{StaticResource Button.Secondary}" Content="Report a problem" Command="{Binding OpenIssuesCommand}" Padding="12,4" Margin="8,0,0,0"/>
+          </StackPanel>
+
+          <Grid Margin="0,18,0,6">
+            <TextBlock Text="COMPONENTS" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+            <Button Style="{StaticResource Button.Link}" Content="Refresh" Command="{Binding RefreshComponentsCommand}" HorizontalAlignment="Right"/>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Components}" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,8">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextTrimming="None"/>
+                  </StackPanel>
+                  <Border Grid.Column="1" Style="{StaticResource Pill.Tone}" VerticalAlignment="Top" Margin="8,0,0,0">
+                    <TextBlock Text="{Binding Version}" Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold"/>
+                  </Border>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{Binding EngineCatalog.Engines}" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,8">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Category}" Style="{StaticResource Text.Caption}"/>
+                  </StackPanel>
+                  <Border Grid.Column="1" Style="{StaticResource Pill.Tone}" VerticalAlignment="Top" Margin="8,0,0,0">
+                    <TextBlock Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold">
+                      <TextBlock.Text>
+                        <PriorityBinding>
+                          <Binding Path="Version"/>
+                          <Binding Path="Availability"/>
+                        </PriorityBinding>
+                      </TextBlock.Text>
+                    </TextBlock>
+                  </Border>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="DATA LOCATIONS" Style="{StaticResource Text.Label}" Margin="0,14,0,6"/>
+          <ItemsControl ItemsSource="{Binding Locations}" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Path}" Style="{StaticResource Text.Caption}" FontFamily="{StaticResource Font.Code}" TextWrapping="Wrap" TextTrimming="None"/>
+                  </StackPanel>
+                  <Button Grid.Column="1" Style="{StaticResource Button.Link}" Content="Open" Command="{Binding OpenCommand}" VerticalAlignment="Top" Margin="8,0,0,0"/>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Grid Margin="0,0,0,6" DataContext="{Binding VaultLocation}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+              <TextBlock Text="{Binding Path}" Style="{StaticResource Text.Caption}" FontFamily="{StaticResource Font.Code}" TextWrapping="Wrap" TextTrimming="None"/>
+            </StackPanel>
+            <Button Grid.Column="1" Style="{StaticResource Button.Link}" Content="Open" Command="{Binding OpenCommand}" VerticalAlignment="Top" Margin="8,0,0,0"/>
+          </Grid>
+
+          <TextBlock Text="THIRD-PARTY LICENSES" Style="{StaticResource Text.Label}" Margin="0,14,0,6"/>
+          <ItemsControl ItemsSource="{Binding Licenses}" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource Text.Base}">
+                      <Run Text="{Binding Component, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  ·  "/><Run Text="{Binding License, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Usage}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                  <Button Grid.Column="1" Style="{StaticResource Button.Link}" Content="License" Command="{Binding OpenCommand}" VerticalAlignment="Top" Margin="8,0,0,0"/>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource Card}" VerticalAlignment="Top">
         <StackPanel>
           <TextBlock Text="SECURITY ENGINES" Style="{StaticResource Text.Label}" Margin="0,0,0,10"/>
           <ItemsControl ItemsSource="{Binding EngineCatalog.Engines}" ItemTemplate="{StaticResource EngineStatusTemplate}"/>
@@ -140,6 +300,7 @@
                      Text="Custom rule files can be set per engine with EngineRulePaths in settings.json; otherwise the bundled rules are used. Press Save Settings to apply."/>
         </StackPanel>
       </Border>
+      </StackPanel>
     </Grid>
   </ScrollViewer>
 </UserControl>

@@ -20,6 +20,15 @@ public interface IDialogService
 {
     void ShowError(string title, string message);
     void ShowInfo(string title, string message);
+
+    /// <summary>Yes/No question; true when the person chose Yes.</summary>
+    bool Confirm(string title, string message);
+}
+
+/// <summary>Starts a downloaded installer and closes the app so its files can be replaced.</summary>
+public interface IInstallerLauncher
+{
+    void RunAndExit(string installerPath);
 }
 
 /// <summary>Opens a link (e.g. obsidian://open?path=…) with the app registered for it.</summary>

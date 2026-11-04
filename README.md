@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.7.0
+# Azura — WebGuard Inspector v0.8.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -74,6 +74,26 @@ isian divalidasi (endpoint AI harus lokal, vault harus ada, path claude.exe haru
 lanjut, dan wizard dianggap selesai hanya setelah **Finish** — menutup aplikasi di tengah jalan akan menampilkannya lagi.
 Wizard bisa diulang dari **Settings → Run setup wizard**.
 
+### Updates dan About (Settings)
+
+- **Updates**: Azura mengecek rilis terbaru di GitHub (`api.github.com/repos/agnanzakariya/WebGuardInspector/releases/latest`)
+  saat start, maksimal sekali sehari, bila diizinkan (ditanyakan di wizard, bisa diubah di Settings), atau lewat **Check now**.
+  Hanya metadata rilis publik yang diminta; tidak ada data proyek yang dikirim. Bila ada versi baru, top bar menampilkan
+  *Update x.y.z available* dan Settings menampilkan catatan rilis.
+- **Download & install** mengunduh `Azura-WebGuard-Inspector-Setup-<versi>.exe` hanya dari
+  `github.com/agnanzakariya/WebGuardInspector/releases/download/…`, mencocokkan SHA-256 dengan yang dipublikasikan di rilis
+  (digest aset GitHub, file `<setup>.sha256`, atau baris `SHA-256: …` di catatan rilis), lalu menjalankannya setelah
+  dikonfirmasi; Azura menutup diri agar file bisa diganti. Tanpa checksum, installer tidak dijalankan otomatis.
+- **About**: identitas aplikasi (logo, versi, pembuat, link GitHub dan laporan masalah), komponen dan versinya (aplikasi,
+  MCP server, runtime .NET, Windows, Claude Code, AI lokal, semua engine), lokasi data dengan tombol **Open** (instalasi,
+  settings, log, backup Fixing, unduhan update, cache intelijen, vault) dan lisensi pihak ketiga.
+
+### Merilis versi baru
+
+1. Naikkan `<Version>` di `Directory.Build.props` dan `AppInfo.Version`.
+2. `.\installer\build-installer.ps1` → `installer\out\Azura-WebGuard-Inspector-Setup-<versi>.exe` + `.sha256`.
+3. Buat GitHub Release dengan tag `v<versi>` dan lampirkan kedua file. Pengguna mendapat pemberitahuan saat start berikutnya.
+
 ### Membangun installer
 
 ```powershell
@@ -99,7 +119,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 73 tests
+.\build.ps1          # restore + build + 78 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -111,7 +131,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 73 tests
+PASS: 78 tests
 PASS: build and tests completed
 ```
 
@@ -144,7 +164,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (73 tests)
+  WebGuard.Tests         Test runner tanpa dependency (78 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -277,6 +297,12 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.8.0** — Updates dan About
+- `GitHubUpdateService`: cek GitHub Releases (harian saat start bila diizinkan, atau manual), unduh installer hanya dari rilis repo
+  ini, verifikasi SHA-256, jalankan setelah konfirmasi. Pemberitahuan update di top bar; opsi update di wizard (langkah Privacy).
+- Settings → Updates dan About: identitas, komponen dan versi, lokasi data dengan tombol Open, lisensi pihak ketiga.
+- `build-installer.ps1` menulis `<setup>.sha256`. 78 tests.
 
 **0.7.0** — Installer dan wizard first-run
 - `installer\build-installer.ps1` + `azura.iss` (Inno Setup 6): Setup.exe self-contained win-x64, engine Gitleaks/OSV-Scanner/YARA-X

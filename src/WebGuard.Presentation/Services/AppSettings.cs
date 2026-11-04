@@ -45,6 +45,12 @@ public sealed record AppSettings
     /// <summary>Record every scan and AI analysis automatically.</summary>
     public bool SecondBrainAutoRecord { get; init; } = true;
 
+    /// <summary>Look for a newer release on GitHub when the app starts (at most once a day).</summary>
+    public bool CheckForUpdates { get; init; } = true;
+
+    /// <summary>When the last update check finished.</summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; init; }
+
     /// <summary>True once the first-run setup wizard was finished; until then the app shows only the wizard.</summary>
     public bool SetupCompleted { get; init; }
 

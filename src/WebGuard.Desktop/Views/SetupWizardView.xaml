@@ -133,6 +133,11 @@
                   <TextBlock Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
                              Text="Stored in your user settings file only. Leave empty to skip the malware hash lookups."/>
                 </StackPanel>
+                <TextBlock Text="Updates" Style="{StaticResource FieldLabel}" Margin="0,18,0,6"/>
+                <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding CheckUpdates, Mode=TwoWay}"
+                          Content="Check GitHub for new versions when Azura starts (once a day)"/>
+                <TextBlock Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Text="Only the public release information of the app is requested from api.github.com. You can always check by hand in Settings → Updates."/>
               </StackPanel>
 
               <!-- 4 Local AI -->

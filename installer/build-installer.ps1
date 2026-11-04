@@ -71,4 +71,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
 
 $setup = Join-Path $out "Azura-WebGuard-Inspector-Setup-$version.exe"
 $size = '{0:N1} MB' -f ((Get-Item $setup).Length / 1MB)
+# The in-app updater only installs a download whose SHA-256 matches the one published with the GitHub release:
+# upload this .sha256 file next to the installer (GitHub's own asset digest is used when available).
+$sha = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -Path "$setup.sha256" -Value "$sha  $(Split-Path $setup -Leaf)" -Encoding ascii
 Write-Host "Installer: $setup ($size)" -ForegroundColor Green
+Write-Host "SHA-256:   $sha  (also in $(Split-Path $setup -Leaf).sha256)" -ForegroundColor Green

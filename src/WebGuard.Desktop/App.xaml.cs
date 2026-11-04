@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using System.Net.Http;
@@ -99,6 +100,23 @@ public partial class App : Application
         var fixing = new FixingViewModel(findings, fixer, new FixApplier(FixApplier.DefaultBackupRoot), secondBrain, settings);
         var setup = new SetupWizardViewModel(settings, theme, catalog, analyst, fixer, secondBrain, folderPicker);
 
+        // Large installer downloads: no client-wide timeout; the update check has its own.
+        var updateHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        updateHttp.DefaultRequestHeaders.UserAgent.ParseAdd($"WebGuardInspector/{AppInfo.Version}");
+        var updates = new GitHubUpdateService(updateHttp, "agnanzakariya", "WebGuardInspector", GitHubUpdateService.DefaultDownloadFolder);
+        var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WebGuardInspector");
+        var about = new AboutViewModel(settings, catalog,
+            new AboutPaths(
+                AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar),
+                JsonSettingsStore.DefaultPath,
+                Path.Combine(dataRoot, "logs"),
+                FixApplier.DefaultBackupRoot,
+                GitHubUpdateService.DefaultDownloadFolder,
+                FileIntelligenceCache.DefaultDirectory,
+                StdioMcpServerHost.BundledExecutablePath,
+                Path.Combine(AppContext.BaseDirectory, "tools", "licenses")),
+            updates, analyst, fixer, launcher, dialogs, new InstallerLauncher());
+
         return new ShellViewModel(
             workspace,
             new OverviewViewModel(workspace, findings, catalog),
@@ -109,7 +127,7 @@ public partial class App : Application
             new SecondBrainViewModel(secondBrain, launcher),
             new IntelligenceViewModel(vulnerabilities, malware),
             new ScanHistoryViewModel(history),
-            new SettingsViewModel(settings, theme, catalog, folderPicker),
+            new SettingsViewModel(settings, theme, catalog, folderPicker, about),
             catalog,
             settings,
             theme,

@@ -39,19 +39,53 @@ public sealed class SaveFileDialogService : ISaveFileDialogService
 public sealed class ExternalLauncher(IDialogService dialogs) : IExternalLauncher
 {
     private static readonly string[] AllowedSchemes = ["obsidian", "https"];
+    private static readonly string[] TextFiles = [".txt", ".md", ".json", ".log"];
 
+    /// <summary>
+    /// Opens obsidian:// and https:// links with their registered app, and local file: URIs as follows: a folder in
+    /// Explorer, a text file (licenses, logs, settings) in the default editor, any other file selected in Explorer.
+    /// Nothing is ever executed.
+    /// </summary>
     public void Open(Uri uri)
     {
         ArgumentNullException.ThrowIfNull(uri);
-        if (!AllowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase)) return;
         try
         {
+            if (uri.IsFile)
+            {
+                OpenLocal(uri.LocalPath);
+                return;
+            }
+            if (!AllowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase)) return;
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true })?.Dispose();
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
             dialogs.ShowError("Could not open the link", ex.Message + (uri.Scheme == "obsidian" ? " Is Obsidian installed?" : string.Empty));
         }
+    }
+
+    private void OpenLocal(string path)
+    {
+        var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        if (Directory.Exists(path))
+            System.Diagnostics.Process.Start(explorer, [path])?.Dispose();
+        else if (File.Exists(path) && TextFiles.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+        else if (File.Exists(path))
+            System.Diagnostics.Process.Start(explorer, ["/select," + path])?.Dispose();
+        else
+            dialogs.ShowInfo("Not found", "This location does not exist (yet): " + path);
+    }
+}
+
+public sealed class InstallerLauncher : IInstallerLauncher
+{
+    /// <summary>Runs the setup (it asks for elevation itself when needed) and shuts the app down so files are unlocked.</summary>
+    public void RunAndExit(string installerPath)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installerPath) { UseShellExecute = true })?.Dispose();
+        Application.Current.Shutdown();
     }
 }
 
@@ -75,6 +109,15 @@ public sealed class DialogService : IDialogService
     public void ShowError(string title, string message) => Show(title, message, MessageBoxImage.Error);
 
     public void ShowInfo(string title, string message) => Show(title, message, MessageBoxImage.Information);
+
+    public bool Confirm(string title, string message)
+    {
+        var owner = Application.Current?.MainWindow;
+        var answer = owner is { IsLoaded: true }
+            ? MessageBox.Show(owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
+            : MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+        return answer == MessageBoxResult.Yes;
+    }
 
     private static void Show(string title, string message, MessageBoxImage image)
     {
