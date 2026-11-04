@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.10.1
+# Azura — WebGuard Inspector v0.10.2
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -140,7 +140,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 86 tests
+.\build.ps1          # restore + build + 88 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -152,7 +152,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 86 tests
+PASS: 88 tests
 PASS: build and tests completed
 ```
 
@@ -185,7 +185,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (86 tests)
+  WebGuard.Tests         Test runner tanpa dependency (88 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -203,7 +203,7 @@ Install engine yang diinginkan; aplikasi mendeteksi .exe otomatis dari PATH, Win
 | Gitleaks | `winget install Gitleaks.Gitleaks` | `gitleaks dir` (≥ 8.19) atau `detect --no-git` untuk versi lama |
 | OSV-Scanner | `winget install Google.OSVScanner` | Mengirim nama/versi package ke OSV.dev, jadi hanya aktif bila *external lookups* diizinkan |
 | YARA-X | `winget install VirusTotal.YARA-X` | Rule bawaan di `rules\yara` (web shell, loader obfuscated, downloader, obfuscation PHP) |
-| ClamAV | `winget install Cisco.ClamAV` (atau centang di Setup) | Antivirus Cisco Talos: `clamscan --file-list` atas semua file hasil inventory. Database signature dikelola Azura di `%LOCALAPPDATA%\WebGuardInspector\clamav\db` (freshclam, tanpa admin) |
+| ClamAV | `winget install Cisco.ClamAV` (atau centang di Setup) | Antivirus Cisco Talos atas semua file hasil inventory: clamd sementara (127.0.0.1, port acak, DB dimuat sekali) dengan satu klien `clamdscan` per inti CPU (maks. 8), fallback ke `clamscan`. Database signature dikelola Azura di `%LOCALAPPDATA%\WebGuardInspector\clamav\db` (freshclam, tanpa admin) |
 | MalwareBazaar + ThreatFox | Auth-Key gratis dari auth.abuse.ch (satu key untuk keduanya) | Hanya SHA-256 file executable/arsip/script, maks. 200 per scan |
 | CISA KEV | Tidak perlu install | Katalog publik diunduh (tanpa data proyek), cache 24 jam; menandai finding OSV-Scanner |
 
@@ -319,6 +319,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.10.2** — ClamAV cepat untuk proyek besar: clamd sementara + klien `clamdscan` paralel (49.695 file dalam ~6 menit, sebelumnya timeout 10 menit); fallback ke `clamscan` bila clamd tidak bisa start; hasil yang sudah ada dipertahankan bila waktu habis. 88 tests.
 
 **0.10.1** — Shortcut *Install or repair dependencies* kini juga memasang ClamAV (+ signature); langkah Security engines di wizard menjelaskan Semgrep dan ClamAV.
 

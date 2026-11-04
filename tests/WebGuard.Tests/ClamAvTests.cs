@@ -127,7 +127,104 @@ public static class ClamAvTests
             "without ClamAV there is nothing to update with");
     }
 
+    [Test]
+    public static async Task Daemon_mode_splits_files_across_parallel_clamdscan_clients_and_stops_clamd()
+    {
+        using var temp = new TempFolder();
+        temp.Write(@"ClamAV\clamscan.exe", "x");
+        temp.Write(@"ClamAV\clamd.exe", "x");
+        temp.Write(@"ClamAV\clamdscan.exe", "x");
+        var clamscan = Path.Combine(temp.Path, "ClamAV", "clamscan.exe");
+        var project = Path.Combine(temp.Path, "proj");
+        var names = Enumerable.Range(0, 20).Select(i => $"f{i}.php").ToArray();
+        foreach (var n in names) temp.Write(@"proj\" + n, "<?php");
+        var db = Path.Combine(temp.Path, "db");
+        Directory.CreateDirectory(db);
+        WriteCvd(db, "main.cvd", "ClamAV-VDB:16 Sep 2021 08-32 -0400:62:1:90:x:y:z:1");
+        WriteCvd(db, "daily.cvd", "ClamAV-VDB:04 Nov 2026 08-26 +0000:28173:1:90:x:y:z:1");
+
+        var runner = new DaemonRunner(project);
+        var engine = new ClamAvEngine(runner, id => new ExternalToolOptions(id, clamscan, true, []), new FixedTimeProvider(Now), () => db);
+        var result = await engine.ScanAsync(new EngineScanRequest(Guid.NewGuid(), project, names.Select(Item).ToArray(), project, TimeSpan.FromMinutes(1)),
+            null, CancellationToken.None);
+
+        Assert.True(result.Succeeded, "scan completed: " + result.Error);
+        Assert.Equal("f7.php", result.Findings.Single().Location.RelativePath, "detection from the client that scanned f7.php");
+        Assert.True(runner.Clients >= 2, "several clamdscan clients ran: " + runner.Clients);
+        Assert.Equal(20, runner.ScannedFiles, "every file was sent to exactly one client");
+        Assert.True(runner.DaemonStopped, "clamd was stopped after the scan");
+        Assert.True(runner.Config!.Contains("TCPAddr 127.0.0.1", StringComparison.Ordinal) && runner.Config.Contains("DatabaseDirectory " + db, StringComparison.Ordinal),
+            "clamd listens on loopback only and uses Azura's database");
+    }
+
+    [Test]
+    public static async Task Daemon_that_does_not_start_falls_back_to_clamscan()
+    {
+        using var temp = new TempFolder();
+        temp.Write(@"ClamAV\clamscan.exe", "x");
+        temp.Write(@"ClamAV\clamd.exe", "x");
+        temp.Write(@"ClamAV\clamdscan.exe", "x");
+        var clamscan = Path.Combine(temp.Path, "ClamAV", "clamscan.exe");
+        var project = Path.Combine(temp.Path, "proj");
+        temp.Write(@"proj\a.php", "<?php");
+        var db = Path.Combine(temp.Path, "db");
+        Directory.CreateDirectory(db);
+        WriteCvd(db, "main.cvd", "ClamAV-VDB:16 Sep 2021 08-32 -0400:62:1:90:x:y:z:1");
+        WriteCvd(db, "daily.cvd", "ClamAV-VDB:04 Nov 2026 08-26 +0000:28173:1:90:x:y:z:1");
+        var runner = new FakeProcessRunner(r => Path.GetFileName(r.ExecutablePath) switch
+        {
+            "clamd.exe" => FakeProcessRunner.Ok("ERROR: Can't bind to port", exitCode: 1),
+            "clamdscan.exe" => FakeProcessRunner.Ok("", exitCode: 2),
+            _ when FakeProcessRunner.IsVersionProbe(r) => FakeProcessRunner.Ok("ClamAV 1.5.4"),
+            _ => FakeProcessRunner.Ok(Path.Combine(project, "a.php") + ": Php.Malware.Test-1 FOUND", exitCode: 1),
+        });
+        var engine = new ClamAvEngine(runner, id => new ExternalToolOptions(id, clamscan, true, []), new FixedTimeProvider(Now), () => db);
+        var result = await engine.ScanAsync(new EngineScanRequest(Guid.NewGuid(), project, [Item("a.php")], project, TimeSpan.FromMinutes(1)), null, CancellationToken.None);
+
+        Assert.True(result.Succeeded && result.Findings.Count == 1, "clamscan fallback found the file");
+        Assert.True(result.Error!.Contains("clamd did not start", StringComparison.Ordinal), "the fallback is reported");
+    }
+
     // ---- Helpers ---------------------------------------------------------------------------------------------------
+
+    /// <summary>clamd runs until cancelled; clamdscan answers ping and reports f7.php from whichever list contains it.</summary>
+    private sealed class DaemonRunner(string project) : IExternalProcessRunner
+    {
+        private int _clients;
+        private int _scanned;
+        public int Clients => _clients;
+        public int ScannedFiles => _scanned;
+        public bool DaemonStopped { get; private set; }
+        public string? Config { get; private set; }
+
+        public async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, CancellationToken cancellationToken)
+        {
+            switch (Path.GetFileName(request.ExecutablePath))
+            {
+                case "clamd.exe":
+                    Config = File.ReadAllText(request.Arguments[0]["--config-file=".Length..]);
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, cancellationToken);
+                    }
+                    finally
+                    {
+                        DaemonStopped = true;
+                    }
+                    throw new InvalidOperationException("unreachable");
+                case "clamdscan.exe" when request.Arguments.Contains("--ping"):
+                    return FakeProcessRunner.Ok("PONG");
+                case "clamdscan.exe":
+                    Interlocked.Increment(ref _clients);
+                    var list = File.ReadAllLines(request.Arguments.Single(a => a.StartsWith("--file-list=", StringComparison.Ordinal))["--file-list=".Length..]);
+                    Interlocked.Add(ref _scanned, list.Length);
+                    var hit = list.FirstOrDefault(l => l.EndsWith("f7.php", StringComparison.Ordinal));
+                    return hit is null ? FakeProcessRunner.Ok("") : FakeProcessRunner.Ok(Path.Combine(project, "f7.php") + ": Php.Malware.Test-1 FOUND", exitCode: 1);
+                default:
+                    return FakeProcessRunner.Ok("ClamAV 1.5.4");
+            }
+        }
+    }
 
     private static FileInventoryItem Item(string path) => new(path, Path.GetExtension(path), 5, Now, null, FileScanStatus.Hashed, 0, null);
 

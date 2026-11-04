@@ -32,44 +32,165 @@ public sealed partial class ClamAvEngine(IExternalProcessRunner runner, Func<str
     protected override string ReadyMessage(string executablePath) =>
         $"{executablePath} · {ClamAvDatabase.Inspect(_databaseFolder()).Describe()}";
 
+    /// <summary>Waiting for clamd to load the signatures (about 20 s for the official database).</summary>
+    private static readonly TimeSpan DaemonStartTimeout = TimeSpan.FromSeconds(120);
+
     protected override async Task<IReadOnlyList<SecurityFinding>> RunAsync(EngineInvocation invocation, CancellationToken cancellationToken)
     {
         var root = invocation.Request.RootFolder;
         var files = invocation.Request.Files.Select(f => Path.Combine(root, f.RelativePath)).Where(File.Exists).ToArray();
         if (files.Length == 0) return [];
 
-        // clamscan reads the list as plain UTF-8: a byte-order mark would break the first path.
-        var list = Path.Combine(Path.GetTempPath(), $"webguard-clamav-{invocation.Request.ScanId:N}.txt");
-        await File.WriteAllLinesAsync(list, files, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+        var work = Path.Combine(Path.GetTempPath(), $"webguard-clamav-{invocation.Request.ScanId:N}");
+        Directory.CreateDirectory(work);
         try
         {
-            List<string> args =
-            [
-                "--stdout", "--infected", "--no-summary",
-                "--database=" + _databaseFolder(),
-                "--file-list=" + list,
-                "--max-filesize=100M", "--max-scansize=400M",
-            ];
-            var result = await RunToolAsync(invocation, args, cancellationToken).ConfigureAwait(false);
-            EnsureComplete(result);
-            // 0 = clean, 1 = something found, 2 = errors (some files may still have been scanned).
-            var (findings, warnings) = Parse(result.StandardOutput, root, Time.GetUtcNow());
-            invocation.Warnings.AddRange(warnings.Take(5));
-            if (result.ExitCode is not (0 or 1) && findings.Count == 0)
-                throw new EngineRunException("ClamAV failed (" + Describe(result) + ").");
-            return findings;
+            var folder = Path.GetDirectoryName(invocation.ExecutablePath)!;
+            var clamd = Path.Combine(folder, "clamd.exe");
+            var clamdscan = Path.Combine(folder, "clamdscan.exe");
+            if (File.Exists(clamd) && File.Exists(clamdscan))
+            {
+                var daemon = await ScanWithDaemonAsync(invocation, clamd, clamdscan, files, work, cancellationToken).ConfigureAwait(false);
+                if (daemon is not null) return daemon;
+                invocation.Warnings.Add("clamd did not start; scanned with clamscan instead (slower).");
+            }
+            return await ScanWithClamscanAsync(invocation, files, work, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             try
             {
-                File.Delete(list);
+                Directory.Delete(work, recursive: true);
             }
             catch (IOException)
             {
-                // Temp file; harmless if it stays.
+                // Temp files; harmless if they stay.
             }
         }
+    }
+
+    /// <summary>Single clamscan process: loads the database itself and scans one file at a time (~25 files/s).</summary>
+    private async Task<IReadOnlyList<SecurityFinding>> ScanWithClamscanAsync(EngineInvocation invocation, string[] files, string work, CancellationToken cancellationToken)
+    {
+        var list = await WriteListAsync(Path.Combine(work, "files.txt"), files, cancellationToken).ConfigureAwait(false);
+        List<string> args =
+        [
+            "--stdout", "--infected", "--no-summary",
+            "--database=" + _databaseFolder(),
+            "--file-list=" + list,
+            "--max-filesize=100M", "--max-scansize=400M",
+        ];
+        var result = await RunToolAsync(invocation, args, cancellationToken).ConfigureAwait(false);
+        return Collect(invocation, [result], files.Length);
+    }
+
+    /// <summary>
+    /// A private clamd for this scan: listening on 127.0.0.1 at a free port, with the signatures loaded once, and one
+    /// clamdscan client per CPU core (max 8) each scanning its share of the files — about ten times faster than clamscan.
+    /// The daemon is stopped afterwards (its process job also ends it on cancel). Returns null when clamd does not come up.
+    /// </summary>
+    private async Task<IReadOnlyList<SecurityFinding>?> ScanWithDaemonAsync(EngineInvocation invocation, string clamd, string clamdscan,
+        string[] files, string work, CancellationToken cancellationToken)
+    {
+        var clients = Math.Clamp(Environment.ProcessorCount, 2, 8);
+        var config = Path.Combine(work, "clamd.conf");
+        await File.WriteAllTextAsync(config, string.Join("\n",
+            "TCPSocket " + FreeLoopbackPort(),
+            "TCPAddr 127.0.0.1",
+            "DatabaseDirectory " + _databaseFolder(),
+            "MaxThreads " + clients,
+            "Foreground yes",
+            "MaxFileSize 100M",
+            "MaxScanSize 400M",
+            "SelfCheck 0",
+            string.Empty), new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var daemon = Runner.RunAsync(new ProcessRunRequest(clamd, ["--config-file=" + config], work, invocation.Request.Timeout + DaemonStartTimeout,
+            1024 * 1024), stop.Token);
+        try
+        {
+            if (!await WaitForDaemonAsync(clamdscan, config, work, daemon, cancellationToken).ConfigureAwait(false)) return null;
+
+            var scans = new List<Task<ProcessRunResult>>();
+            for (var i = 0; i < clients; i++)
+            {
+                var share = files.Where((_, index) => index % clients == i).ToArray();
+                if (share.Length == 0) continue;
+                var list = await WriteListAsync(Path.Combine(work, $"files{i}.txt"), share, cancellationToken).ConfigureAwait(false);
+                scans.Add(Runner.RunAsync(new ProcessRunRequest(clamdscan,
+                    ["--config-file=" + config, "--stdout", "--infected", "--no-summary", "--file-list=" + list],
+                    work, invocation.Request.Timeout, DefaultMaxOutputBytes), cancellationToken));
+            }
+            var results = await Task.WhenAll(scans).ConfigureAwait(false);
+            return Collect(invocation, results, files.Length);
+        }
+        finally
+        {
+            await stop.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                await daemon.ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                // Expected: the daemon is stopped by cancelling its run (or never started, which was handled above).
+            }
+        }
+    }
+
+    private async Task<bool> WaitForDaemonAsync(string clamdscan, string config, string work, Task<ProcessRunResult> daemon, CancellationToken cancellationToken)
+    {
+        var deadline = Time.GetUtcNow() + DaemonStartTimeout;
+        while (Time.GetUtcNow() < deadline)
+        {
+            if (daemon.IsCompleted) return false;   // clamd exited (bad config, port taken, database error)
+            var ping = await Runner.RunAsync(new ProcessRunRequest(clamdscan, ["--config-file=" + config, "--ping", "1"], work,
+                TimeSpan.FromSeconds(10), 64 * 1024), cancellationToken).ConfigureAwait(false);
+            if (ping.ExitCode == 0) return true;
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+        }
+        return false;
+    }
+
+    /// <summary>Findings of every run; a timed-out run keeps what it found and is reported as incomplete.</summary>
+    private List<SecurityFinding> Collect(EngineInvocation invocation, IReadOnlyList<ProcessRunResult> results, int fileCount)
+    {
+        var findings = new List<SecurityFinding>();
+        var warnings = new List<string>();
+        foreach (var result in results)
+        {
+            var (f, w) = Parse(result.StandardOutput, invocation.Request.RootFolder, Time.GetUtcNow());
+            findings.AddRange(f);
+            warnings.AddRange(w);
+            // 0 = clean, 1 = something found, 2 = errors (some files may still have been scanned).
+            if (!result.TimedOut && result.ExitCode is not (0 or 1) && f.Count == 0 && w.Count == 0)
+                throw new EngineRunException("ClamAV failed (" + Describe(result) + ").");
+        }
+        if (results.Any(r => r.TimedOut))
+        {
+            if (findings.Count == 0 && results.All(r => r.TimedOut))
+                throw new EngineRunException($"ClamAV timed out after {invocation.Request.Timeout.TotalMinutes:0} min ({fileCount:N0} files).");
+            invocation.Warnings.Add($"ClamAV did not finish all {fileCount:N0} files within {invocation.Request.Timeout.TotalMinutes:0} min; results are incomplete.");
+        }
+        invocation.Warnings.AddRange(warnings.Distinct().Take(5));
+        return findings;
+    }
+
+    private static async Task<string> WriteListAsync(string path, string[] files, CancellationToken cancellationToken)
+    {
+        // clamscan/clamdscan read the list as plain UTF-8: a byte-order mark would break the first path.
+        await File.WriteAllLinesAsync(path, files, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+        return path;
+    }
+
+    private static int FreeLoopbackPort()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
     }
 
     /// <summary>Parses "path: Signature.Name FOUND" lines; other non-empty lines are reported as warnings.</summary>
