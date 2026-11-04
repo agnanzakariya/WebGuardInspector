@@ -137,7 +137,7 @@ public sealed partial class SemgrepEngine(IExternalProcessRunner runner, Func<st
                 EngineOutput.ConfidenceFromLabel(metadata.GetString("confidence"), Confidence.Medium),
                 location,
                 snippet,
-                snippet is null ? [] : [new Evidence("code", "Matched code", snippet, "semgrep")],
+                snippet is null ? [] : [new Evidence("code", "Matched code", SourceRedactor.Redact(snippet, path), "semgrep")],
                 EngineOutput.NormalizeCwe(metadata.Strings("cwe")),
                 [],
                 extra.GetString("fix") is { } fix ? "Suggested fix: " + fix : metadata.GetString("remediation"),

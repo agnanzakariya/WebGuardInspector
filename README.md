@@ -1,4 +1,4 @@
-# WebGuard Inspector v0.6.0 — Local Source Security Workspace
+# WebGuard Inspector v0.6.1 — Local Source Security Workspace
 
 Aplikasi desktop Windows (WPF, .NET 10) untuk inspeksi keamanan source code secara lokal.
 Setelah inventory + SHA-256, aplikasi menjalankan engine deteksi (Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup
@@ -63,7 +63,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 67 tests
+.\build.ps1          # restore + build + 70 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -75,7 +75,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 67 tests
+PASS: 70 tests
 PASS: build and tests completed
 ```
 
@@ -108,7 +108,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (67 tests)
+  WebGuard.Tests         Test runner tanpa dependency (70 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -125,9 +125,24 @@ Install engine yang diinginkan; aplikasi mendeteksi .exe otomatis dari PATH, Win
 | Semgrep CE | `pip install --user semgrep` | Rule bawaan di `rules\semgrep`; tidak memakai registry/login. Folder Scripts Python ikut dicari otomatis; file yang terkunci antivirus dilewati dan dilaporkan |
 | Gitleaks | `winget install Gitleaks.Gitleaks` | `gitleaks dir` (≥ 8.19) atau `detect --no-git` untuk versi lama |
 | OSV-Scanner | `winget install Google.OSVScanner` | Mengirim nama/versi package ke OSV.dev, jadi hanya aktif bila *external lookups* diizinkan |
-| YARA-X | `winget install VirusTotal.YARA-X` | Rule bawaan di `rules\yara` (web shell, loader obfuscated, downloader) |
+| YARA-X | `winget install VirusTotal.YARA-X` | Rule bawaan di `rules\yara` (web shell, loader obfuscated, downloader, obfuscation PHP) |
 | MalwareBazaar + ThreatFox | Auth-Key gratis dari auth.abuse.ch (satu key untuk keduanya) | Hanya SHA-256 file executable/arsip/script, maks. 200 per scan |
 | CISA KEV | Tidak perlu install | Katalog publik diunduh (tanpa data proyek), cache 24 jam; menandai finding OSV-Scanner |
+
+### Rule PHP (v0.6.1)
+
+Untuk aplikasi PHP, plugin/tema WordPress dan paket pihak ketiga ("nulled"):
+
+- `rules\semgrep\webguard-php.yaml` — 13 rule. Mode *taint* (dalam satu fungsi) dari input request (`$_GET`, `$_POST`,
+  `$_REQUEST`, `$_COOKIE`, `$_FILES`, header, `php://input`) ke: SQL injection (mysqli, PDO, `$wpdb`), command injection,
+  code injection (`eval`, `assert`, callback dinamis), file inclusion, path traversal, `unserialize`, XSS. Ditambah pola:
+  `extract`/`parse_str`, `preg_replace` /e, kode yang diunduh lalu dieksekusi, kredensial hardcoded, hash password MD5/SHA-1,
+  verifikasi TLS dimatikan. Sanitizer umum (`intval`, `htmlspecialchars`, `esc_*`, `$wpdb->prepare`, `escapeshellarg`,
+  `basename`) dikenali.
+- `rules\yara\webguard-php.yar` — 7 rule obfuscation/backdoor: nama fungsi berbahaya dalam escape hex/oktal atau `strrev`,
+  parameter request dipanggil sebagai fungsi, eval/include dari URL, rantai `chr()`, tabel `$GLOBALS` ter-obfuscate,
+  pembuatan akun administrator WordPress. Semua butuh tag `<?php`, jadi dokumentasi/rule tidak ikut cocok.
+- Diuji dengan Semgrep 1.183 dan YARA-X 1.22: setiap baris rentan di sampel terdeteksi, varian aman tidak.
 
 Setiap engine berjalan berurutan setelah hashing dengan timeout 10 menit. Engine yang gagal dicatat di ringkasan
 (halaman Findings dan laporan JSON) tanpa membatalkan scan.
@@ -222,6 +237,12 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.6.1** — Rule PHP
+- 13 rule Semgrep PHP (taint dari input request: SQLi, command/code injection, file inclusion, path traversal, unserialize, XSS;
+  serta kredensial hardcoded, hash password lemah, TLS off, `preg_replace` /e, remote code load, `extract`).
+- 7 rule YARA-X untuk obfuscation/backdoor PHP dan admin WordPress tersembunyi.
+- Evidence Semgrep kini diredaksi; redactor juga menangkap `define('KEY', '…')` dan `'password' => '…'`. 70 tests.
 
 **0.6.0** — Fixing dengan Claude
 - Halaman Fixing: usulan perbaikan per temuan lewat Claude Code CLI (tanpa tool, tanpa akses proyek), diff, Apply dengan backup, Undo.

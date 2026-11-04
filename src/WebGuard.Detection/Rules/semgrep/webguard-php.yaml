@@ -1,0 +1,407 @@
+# WebGuard Inspector PHP rules (local only; no registry download).
+# Aimed at PHP web apps, WordPress plugins/themes and third-party ("nulled") packages: injection from request input
+# (taint mode, within one function), hard-coded credentials and risky settings.
+# Every taint rule repeats the same request-input sources (Semgrep does not resolve YAML anchors).
+rules:
+  - id: webguard.php.sql-injection
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: Request input reaches an SQL query without parameters or escaping. This allows SQL injection.
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: intval(...)
+          - pattern: floatval(...)
+          - pattern: (int) $X
+          - pattern: (float) $X
+          - pattern: absint(...)
+          - pattern: esc_sql(...)
+          - pattern: mysqli_real_escape_string(...)
+          - pattern: $DB->real_escape_string(...)
+          - pattern: $DB->quote(...)
+          - pattern: $DB->prepare(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: mysqli_query($C, $Q, ...)
+              - pattern: mysqli_multi_query($C, $Q)
+              - pattern: mysql_query($Q, ...)
+              - pattern: pg_query($C, $Q)
+              - pattern: $DB->query($Q, ...)
+              - pattern: $DB->multi_query($Q)
+              - pattern: $DB->exec($Q)
+              - pattern: $DB->get_results($Q, ...)
+              - pattern: $DB->get_row($Q, ...)
+              - pattern: $DB->get_var($Q, ...)
+              - pattern: $DB->get_col($Q, ...)
+          - focus-metavariable: $Q
+    metadata:
+      category: security
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      confidence: HIGH
+      remediation: Use prepared statements (mysqli/PDO prepare with bound parameters, $wpdb->prepare in WordPress).
+
+  - id: webguard.php.command-injection
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: Request input reaches an operating-system command. This allows command injection.
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: escapeshellarg(...)
+          - pattern: intval(...)
+          - pattern: (int) $X
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($CMD, ...)
+              - pattern: shell_exec($CMD)
+              - pattern: system($CMD, ...)
+              - pattern: passthru($CMD, ...)
+              - pattern: popen($CMD, $M)
+              - pattern: proc_open($CMD, ...)
+              - pattern: pcntl_exec($CMD, ...)
+          - focus-metavariable: $CMD
+    metadata:
+      category: security
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      confidence: HIGH
+      remediation: Avoid the shell; if a command is unavoidable, pass each argument through escapeshellarg and allow-list values.
+
+  - id: webguard.php.code-injection
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: Request input is executed as PHP code or used as a function name. This is remote code execution (typical of web shells and backdoors).
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($CODE)
+              - pattern: assert($CODE, ...)
+              - pattern: create_function($A, $CODE)
+              - pattern: call_user_func($CODE, ...)
+              - pattern: call_user_func_array($CODE, ...)
+              - pattern: array_map($CODE, ...)
+              - pattern: usort($A, $CODE)
+              - pattern: $CODE(...)
+          - focus-metavariable: $CODE
+    metadata:
+      category: security
+      cwe: ["CWE-94: Improper Control of Generation of Code"]
+      confidence: HIGH
+      remediation: Remove the dynamic execution. Map allowed actions to fixed functions with an allow-list.
+
+  - id: webguard.php.file-inclusion
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: Request input decides which file is included. This allows local or remote file inclusion.
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: basename(...)
+          - pattern: intval(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: include $F
+              - pattern: include_once $F
+              - pattern: require $F
+              - pattern: require_once $F
+          - focus-metavariable: $F
+    metadata:
+      category: security
+      cwe: ["CWE-98: Improper Control of Filename for Include/Require Statement in PHP Program"]
+      confidence: HIGH
+      remediation: Include only files from a fixed allow-list; never build the path from request input.
+
+  - id: webguard.php.path-traversal
+    mode: taint
+    languages: [php]
+    severity: WARNING
+    message: Request input is used as a file path. "../" sequences can read, overwrite or delete files outside the intended folder.
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: basename(...)
+          - pattern: intval(...)
+          - pattern: sanitize_file_name(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: file_get_contents($P, ...)
+              - pattern: file_put_contents($P, ...)
+              - pattern: fopen($P, ...)
+              - pattern: readfile($P, ...)
+              - pattern: file($P, ...)
+              - pattern: unlink($P, ...)
+              - pattern: copy($S, $P, ...)
+              - pattern: rename($S, $P, ...)
+              - pattern: move_uploaded_file($S, $P)
+          - focus-metavariable: $P
+    metadata:
+      category: security
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory"]
+      confidence: MEDIUM
+      remediation: Resolve the path with realpath() and check it stays inside an allowed folder, or use basename() with an allow-list.
+
+  - id: webguard.php.unserialize-input
+    mode: taint
+    languages: [php]
+    severity: ERROR
+    message: Request input is passed to unserialize(). Crafted data can trigger object injection (POP chains) and code execution.
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sinks:
+      - patterns:
+          - pattern: unserialize($D, ...)
+          - focus-metavariable: $D
+    metadata:
+      category: security
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      confidence: HIGH
+      remediation: Use json_decode for untrusted data, or unserialize($data, ['allowed_classes' => false]).
+
+  - id: webguard.php.reflected-xss
+    mode: taint
+    languages: [php]
+    severity: WARNING
+    message: Request input is written to the page without HTML escaping. This allows cross-site scripting.
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+          - pattern: $_FILES
+          - pattern: $_SERVER['HTTP_$H']
+          - pattern: $_SERVER['QUERY_STRING']
+          - pattern: $_SERVER['REQUEST_URI']
+          - pattern: $_SERVER['PHP_SELF']
+          - pattern: file_get_contents('php://input')
+          - pattern: filter_input(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: htmlspecialchars(...)
+          - pattern: htmlentities(...)
+          - pattern: strip_tags(...)
+          - pattern: intval(...)
+          - pattern: (int) $X
+          - pattern: json_encode(...)
+          - pattern: urlencode(...)
+          - pattern: rawurlencode(...)
+          - pattern: esc_html(...)
+          - pattern: esc_attr(...)
+          - pattern: esc_url(...)
+          - pattern: esc_js(...)
+          - pattern: esc_textarea(...)
+          - pattern: wp_kses(...)
+          - pattern: wp_kses_post(...)
+          - pattern: sanitize_text_field(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: echo ...;
+          - pattern: print(...)
+          - pattern: printf(...)
+          - pattern: vprintf(...)
+    metadata:
+      category: security
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      confidence: MEDIUM
+      remediation: Escape on output with htmlspecialchars($value, ENT_QUOTES, 'UTF-8') (esc_html/esc_attr in WordPress).
+
+  - id: webguard.php.extract-request
+    languages: [php]
+    severity: ERROR
+    message: extract()/parse_str() turns request input into local variables, letting an attacker overwrite any variable.
+    pattern-either:
+      - pattern: extract($_GET, ...)
+      - pattern: extract($_POST, ...)
+      - pattern: extract($_REQUEST, ...)
+      - pattern: extract($_COOKIE, ...)
+      - pattern: parse_str($X)
+    metadata:
+      category: security
+      cwe: ["CWE-621: Variable Extraction Error"]
+      confidence: HIGH
+      remediation: Read the needed keys explicitly; call parse_str with a second (result) argument.
+
+  - id: webguard.php.preg-replace-eval
+    languages: [php]
+    severity: ERROR
+    message: preg_replace with the /e modifier evaluates the replacement as PHP code (a known backdoor technique).
+    patterns:
+      - pattern: preg_replace($P, ...)
+      - metavariable-regex:
+          metavariable: $P
+          regex: ^['"](.).*\1[a-df-zA-Z]*e[a-zA-Z]*['"]$
+    metadata:
+      category: security
+      cwe: ["CWE-94: Improper Control of Generation of Code"]
+      confidence: HIGH
+      remediation: Use preg_replace_callback.
+
+  - id: webguard.php.remote-code-load
+    languages: [php]
+    severity: ERROR
+    message: Code downloaded at runtime is executed. Packages with this pattern can be changed remotely at any time (backdoor / phone-home loader).
+    pattern-either:
+      - pattern: eval(file_get_contents(...))
+      - pattern: eval(curl_exec(...))
+      - pattern: eval(gzinflate(file_get_contents(...)))
+      - pattern: eval(base64_decode(file_get_contents(...)))
+      - pattern: |
+          $X = file_get_contents("=~/^https?:/");
+          ...
+          eval($X);
+      - pattern: |
+          $X = curl_exec($C);
+          ...
+          eval($X);
+      - pattern: include "=~/^(https?|ftp|php|data):/";
+      - pattern: require "=~/^(https?|ftp|php|data):/";
+      - pattern: include_once "=~/^(https?|ftp|php|data):/";
+      - pattern: require_once "=~/^(https?|ftp|php|data):/";
+    metadata:
+      category: security
+      cwe: ["CWE-494: Download of Code Without Integrity Check"]
+      confidence: HIGH
+      remediation: Remove the remote loader. Ship code with the package and verify updates with signatures.
+
+  - id: webguard.php.hardcoded-credential
+    languages: [php]
+    severity: WARNING
+    message: A password, secret or API key is hard-coded in source code. Anyone with the code (or a leaked backup) has it.
+    patterns:
+      - pattern-either:
+          - pattern: $NAME = '$VALUE';
+          - pattern: $NAME = "$VALUE";
+          - pattern: $OBJ->$NAME = '$VALUE';
+          - pattern: $OBJ->$NAME = "$VALUE";
+          - pattern: define('$NAME', '$VALUE')
+          - pattern: define("$NAME", "$VALUE")
+          - pattern: |
+              [..., '$NAME' => '$VALUE', ...]
+          - pattern: |
+              [..., "$NAME" => "$VALUE", ...]
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i)^\$?\w*(pass(word|wd)?|pwd|secret|api_?key|access_?key|auth_?key|private_?key|token)\w*$
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^(?!(?i).*(here|changeme|example|your|xxx|dummy|test|placeholder|\{\{|\$\{|%s))[^\s'"]{6,}$
+    metadata:
+      category: security
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      confidence: MEDIUM
+      remediation: Read the value from an environment variable or a config file outside the web root that is not committed.
+
+  - id: webguard.php.weak-password-hash
+    languages: [php]
+    severity: WARNING
+    message: A password is hashed with MD5/SHA-1, which are fast and unsalted and can be cracked quickly.
+    patterns:
+      - pattern-either:
+          - pattern: md5($PW)
+          - pattern: sha1($PW)
+          - pattern: hash('md5', $PW)
+          - pattern: hash('sha1', $PW)
+      - metavariable-regex:
+          metavariable: $PW
+          regex: (?i).*(pass(word|wd)?|pwd).*
+    metadata:
+      category: security
+      cwe: ["CWE-916: Use of Password Hash With Insufficient Computational Effort"]
+      confidence: MEDIUM
+      remediation: Use password_hash() and password_verify().
+
+  - id: webguard.php.tls-verification-disabled
+    languages: [php]
+    severity: WARNING
+    message: TLS certificate verification is turned off, so a network attacker can read or change the traffic.
+    pattern-either:
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYPEER, false)
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYPEER, 0)
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYHOST, false)
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYHOST, 0)
+      - pattern: |
+          [..., 'sslverify' => false, ...]
+    metadata:
+      category: security
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      confidence: HIGH
+      remediation: Keep verification on (CURLOPT_SSL_VERIFYPEER true, VERIFYHOST 2; 'sslverify' => true).

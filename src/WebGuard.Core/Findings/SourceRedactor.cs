@@ -51,8 +51,8 @@ public static partial class SourceRedactor
     [GeneratedRegex(@"(?<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*://)(?<user>[^:/\s@]+):(?<pass>[^@/\s]+)@")]
     private static partial Regex UrlCredentials();
 
-    // apiKey = "value", "password": "value", secret: 'value'
-    [GeneratedRegex(@"(?<key>" + Keyword + @")(?<sep>[""']?\s*[:=]\s*)(?<q>[""'])(?<value>[^""'\r\n]{3,})\k<q>")]
+    // apiKey = "value", "password": "value", secret: 'value', 'db_password' => 'value', define('API_KEY', 'value')
+    [GeneratedRegex(@"(?<key>" + Keyword + @")(?<sep>[""']?\s*(?:=>|[:=,])\s*)(?<q>[""'])(?<value>[^""'\r\n]{3,})\k<q>")]
     private static partial Regex QuotedSecret();
 
     // Server=x;Password=value;  /  "...;pwd=value"
