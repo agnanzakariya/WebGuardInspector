@@ -45,6 +45,15 @@ public sealed record AppSettings
     /// <summary>Record every scan and AI analysis automatically.</summary>
     public bool SecondBrainAutoRecord { get; init; } = true;
 
+    /// <summary>Fixing findings with the Claude Code CLI under the user's own Claude login.</summary>
+    public bool ClaudeFixEnabled { get; init; } = true;
+
+    /// <summary>Absolute path to claude.exe; empty = auto-detect.</summary>
+    public string? ClaudeCliPath { get; init; }
+
+    /// <summary>Claude model alias or id (sonnet, opus, …); empty = the CLI default.</summary>
+    public string? ClaudeModel { get; init; }
+
     /// <summary>Engines that send data off the machine and therefore also require <see cref="AllowExternalIntelligence"/>.</summary>
     public static IReadOnlyCollection<string> NetworkEngines { get; } = ["osv-scanner"];
 

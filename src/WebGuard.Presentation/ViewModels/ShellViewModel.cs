@@ -43,6 +43,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         OverviewViewModel overview,
         LocalScannerViewModel scanner,
         FindingsViewModel findings,
+        FixingViewModel fixing,
         AiAnalystViewModel ai,
         SecondBrainViewModel secondBrain,
         IntelligenceViewModel intelligence,
@@ -58,7 +59,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         Engines = engines;
         _settings = settings;
         _theme = theme;
-        _pages = new PageViewModel[] { overview, scanner, findings, ai, secondBrain, intelligence, history, settingsPage }
+        _pages = new PageViewModel[] { overview, scanner, findings, fixing, ai, secondBrain, intelligence, history, settingsPage }
             .ToDictionary(p => p.Key);
 
         NavItems =
@@ -66,6 +67,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             new(PageKey.Overview, "Overview", ""),
             new(PageKey.LocalScanner, "Local Scanner", ""),
             new(PageKey.Findings, "Findings", ""),
+            new(PageKey.Fixing, "Fixing", ""),
             new(PageKey.AiAnalyst, "AI Analyst", ""),
             new(PageKey.SecondBrain, "Second Brain", ""),
             new(PageKey.Intelligence, "Intelligence", ""),
@@ -90,6 +92,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             // Intelligence statuses are instant; engine statuses run a version probe per CLI tool, so they go last.
             await intelligence.RefreshAsync().ConfigureAwait(true);
             await ai.RefreshAsync().ConfigureAwait(true);
+            await fixing.RefreshAsync().ConfigureAwait(true);
             await secondBrain.RefreshAsync().ConfigureAwait(true);
             await Engines.RefreshAsync().ConfigureAwait(true);
         };
@@ -136,6 +139,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         await Task.WhenAll(
             Engines.RefreshAsync(),
             Page<AiAnalystViewModel>().RefreshAsync(),
+            Page<FixingViewModel>().RefreshAsync(),
             Page<SecondBrainViewModel>().RefreshAsync(),
             Page<IntelligenceViewModel>().RefreshAsync()).ConfigureAwait(true);
     }
@@ -144,6 +148,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     {
         Workspace.Dispose();
         Page<FindingsViewModel>().Dispose();
+        Page<FixingViewModel>().Dispose();
     }
 
     private async Task OnScanCompletedAsync(ScanReport report, FindingsViewModel findings, ScanHistoryViewModel history)

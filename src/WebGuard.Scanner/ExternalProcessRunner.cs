@@ -30,6 +30,7 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
+            StandardInputEncoding = request.StandardInput is null ? null : new UTF8Encoding(false),
         };
         foreach (var argument in request.Arguments) info.ArgumentList.Add(argument);
         if (request.Environment is not null)
@@ -47,7 +48,6 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
         process.Start();
         // Disposing the job (kill-on-close) also ends any worker the tool left behind after a normal exit.
         using var job = ProcessJob.TryAttach(process);
-        process.StandardInput.Close();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -56,6 +56,7 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
         var timedOut = false;
         try
         {
+            await WriteInputAsync(process, request.StandardInput, linked.Token).ConfigureAwait(false);
             await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -75,6 +76,20 @@ public sealed class ExternalProcessRunner : IExternalProcessRunner
             sw.Elapsed,
             timedOut,
             stdout.Truncated);
+    }
+
+    /// <summary>Sends the optional input (e.g. a prompt too long for the command line) and closes stdin.</summary>
+    private static async Task WriteInputAsync(Process process, string? input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (input is not null) await process.StandardInput.WriteAsync(input.AsMemory(), cancellationToken).ConfigureAwait(false);
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // The tool exited without reading its input; its exit code and stderr tell why.
+        }
     }
 
     private static readonly TimeSpan KillWait = TimeSpan.FromSeconds(5);

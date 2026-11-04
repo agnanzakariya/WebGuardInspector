@@ -62,6 +62,20 @@
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
           <StackPanel>
+            <TextBlock Text="FIXING WITH CLAUDE" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClaudeFixEnabled, Mode=TwoWay}" Content="Propose fixes with the Claude Code CLI"/>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                       Text="Uses your own Claude login (run &quot;claude&quot; once and sign in with /login). The redacted file of the finding is sent to Anthropic; Claude runs without tools, so it cannot read the project or change files. You apply each change yourself."/>
+            <TextBlock Text="Path to claude.exe (empty = auto-detect)" Style="{StaticResource Text.Secondary}" Margin="0,12,0,6"/>
+            <TextBox Text="{Binding ClaudeCliPath, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
+                     Tag="%USERPROFILE%\.local\bin\claude.exe" AutomationProperties.Name="Claude Code path"/>
+            <TextBlock Text="Model (empty = Claude Code default; e.g. sonnet, opus)" Style="{StaticResource Text.Secondary}" Margin="0,12,0,6"/>
+            <TextBox Text="{Binding ClaudeModel, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
+                     Tag="default" AutomationProperties.Name="Claude model"/>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+          <StackPanel>
             <TextBlock Text="SECOND BRAIN (OBSIDIAN)" Style="{StaticResource Text.Label}" Margin="0,0,0,12"/>
             <TextBlock Text="Obsidian vault folder" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
             <Grid>

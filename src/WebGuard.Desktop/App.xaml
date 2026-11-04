@@ -22,6 +22,7 @@
       <DataTemplate DataType="{x:Type vm:OverviewViewModel}"><views:OverviewView/></DataTemplate>
       <DataTemplate DataType="{x:Type vm:LocalScannerViewModel}"><views:LocalScannerView/></DataTemplate>
       <DataTemplate DataType="{x:Type vm:FindingsViewModel}"><views:FindingsView/></DataTemplate>
+      <DataTemplate DataType="{x:Type vm:FixingViewModel}"><views:FixingView/></DataTemplate>
       <DataTemplate DataType="{x:Type vm:AiAnalystViewModel}"><views:AiAnalystView/></DataTemplate>
       <DataTemplate DataType="{x:Type vm:SecondBrainViewModel}"><views:SecondBrainView/></DataTemplate>
       <DataTemplate DataType="{x:Type vm:IntelligenceViewModel}"><views:IntelligenceView/></DataTemplate>

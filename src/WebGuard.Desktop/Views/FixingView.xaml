@@ -1,0 +1,226 @@
+<UserControl x:Class="WebGuard.Desktop.Views.FixingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:FixingViewModel}">
+  <UserControl.Resources>
+    <Style x:Key="DiffRow" TargetType="Border">
+      <Setter Property="Padding" Value="6,1"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding Kind}" Value="Added"><Setter Property="Background" Value="{DynamicResource Brush.SuccessSoft}"/></DataTrigger>
+        <DataTrigger Binding="{Binding Kind}" Value="Removed"><Setter Property="Background" Value="{DynamicResource Brush.DangerSoft}"/></DataTrigger>
+        <DataTrigger Binding="{Binding Kind}" Value="Header"><Setter Property="Background" Value="{DynamicResource Brush.InfoSoft}"/><Setter Property="Margin" Value="0,6,0,0"/></DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="DiffText" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{StaticResource Font.Code}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+      <Setter Property="TextWrapping" Value="NoWrap"/>
+    </Style>
+    <Style x:Key="DiffNumber" TargetType="TextBlock" BasedOn="{StaticResource DiffText}">
+      <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+      <Setter Property="TextAlignment" Value="Right"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+    </Style>
+  </UserControl.Resources>
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition Width="1.25*"/>
+    </Grid.ColumnDefinitions>
+
+    <!-- Claude status and batch actions -->
+    <Border Grid.ColumnSpan="2" Style="{StaticResource Card}" Padding="16,12">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Style="{StaticResource Icon.Tone}" VerticalAlignment="Top" Margin="0,2,10,0"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock Text="Claude Code" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding FixerStatusText}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextTrimming="None" Margin="0,2,0,0"/>
+          <ProgressBar IsIndeterminate="True" Height="4" Margin="0,8,0,0" Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}"/>
+          <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0"
+                     Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}"/>
+          <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,4,0,0"/>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
+          <Button Style="{StaticResource Button.Secondary}" Command="{Binding RefreshStatusCommand}" Padding="10,6" Margin="0,0,8,0"
+                  ToolTip="Check Claude Code again (e.g. after signing in)">
+            <TextBlock Text="&#xE72C;" Style="{StaticResource Text.Icon}" FontSize="12"/>
+          </Button>
+          <Button Style="{StaticResource Button.Secondary}" Content="Cancel" Command="{Binding CancelCommand}" Padding="12,6" Margin="0,0,8,0"
+                  Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}"/>
+          <Button Style="{StaticResource Button.Primary}" Command="{Binding FixAllCommand}" Padding="14,6"
+                  ToolTip="Ask Claude about every finding that is not answered yet and not closed (False positive, Accepted risk, Fixed). Nothing is written until you Apply.">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE90F;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
+              <TextBlock Text="Fix all open findings" Margin="6,0,0,0" FontSize="12"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Findings and their fix state -->
+    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,12,12,0" Padding="0">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Findings" Style="{StaticResource Text.Section}" Margin="16,12,12,8"/>
+        <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}" Margin="6,0,6,6"
+                  Visibility="{Binding HasItems, Converter={StaticResource BoolToVisibility}}">
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Header="Severity" Width="100" SortMemberPath="Severity">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Pill.Severity}">
+                    <TextBlock Text="{Binding SeverityText}" Foreground="White" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                  </Border>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="Issue" Width="1.6*" SortMemberPath="Title">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource Cell.Text}"/>
+                    <TextBlock Text="{Binding Location}" Style="{StaticResource Cell.Secondary}" FontFamily="{StaticResource Font.Code}" FontSize="11"/>
+                  </StackPanel>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="Fix" Width="1*" SortMemberPath="State">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Pill.Tone}">
+                    <TextBlock Text="{Binding StateText}" Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold"/>
+                  </Border>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="0.8*" ElementStyle="{StaticResource Cell.Secondary}"/>
+          </DataGrid.Columns>
+        </DataGrid>
+        <StackPanel Grid.Row="1" Margin="16,8,16,16" Visibility="{Binding HasNoItems, Converter={StaticResource BoolToVisibility}}">
+          <TextBlock Text="&#xE90F;" Style="{StaticResource Text.Icon}" FontSize="34" Foreground="{DynamicResource Brush.Info}" HorizontalAlignment="Left"/>
+          <TextBlock Text="Nothing to fix yet" Style="{StaticResource Text.Section}" Margin="0,12,0,4"/>
+          <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Text.Wrap}"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Proposal of the selected finding -->
+    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Margin="0,12,0,0">
+      <Grid>
+        <ScrollViewer x:Name="DetailScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Visibility="{Binding HasSelectedItem, Converter={StaticResource BoolToVisibility}}">
+          <StackPanel DataContext="{Binding SelectedItem}">
+            <WrapPanel Margin="0,0,0,8">
+              <Border Style="{StaticResource Pill.Severity}" Margin="0,0,8,4">
+                <TextBlock Text="{Binding SeverityText}" Foreground="White" FontWeight="SemiBold" FontSize="12"/>
+              </Border>
+              <Border Style="{StaticResource Pill.Tone}" Margin="0,0,8,4">
+                <TextBlock Text="{Binding StateText}" Style="{StaticResource Text.Tone}" FontSize="12" FontWeight="SemiBold"/>
+              </Border>
+              <TextBlock Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Margin="0,0,0,4">
+                <Run Text="{Binding Engine, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding RuleId, Mode=OneWay}"/>
+              </TextBlock>
+            </WrapPanel>
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextWrapping="Wrap" TextTrimming="None"/>
+            <TextBlock Text="{Binding Location}" Style="{StaticResource Text.Code}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,4,0,10" TextWrapping="Wrap"/>
+
+            <!-- Page-level commands act on the selected item. -->
+            <WrapPanel DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+              <Button Style="{StaticResource Button.Primary}" Command="{Binding FixSelectedCommand}" Padding="12,6" Margin="0,0,8,6"
+                      ToolTip="Ask Claude to fix this finding. Only the redacted file is sent; nothing is changed until you Apply.">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
+                  <TextBlock Text="Fix with Claude" Margin="6,0,0,0" FontSize="12"/>
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource Button.Primary}" Command="{Binding ApplyCommand}" Padding="12,6" Margin="0,0,8,6"
+                      Visibility="{Binding SelectedItem.CanApply, Converter={StaticResource BoolToVisibility}}"
+                      ToolTip="Write this change to the file. The original is backed up first.">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE73E;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
+                  <TextBlock Text="Apply fix" Margin="6,0,0,0" FontSize="12"/>
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource Button.Secondary}" Command="{Binding UndoCommand}" Padding="12,6" Margin="0,0,8,6"
+                      Visibility="{Binding SelectedItem.CanUndo, Converter={StaticResource BoolToVisibility}}"
+                      ToolTip="Restore the original file from the backup">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE7A7;" Style="{StaticResource Text.Icon}" FontSize="12"/>
+                  <TextBlock Text="Undo" Margin="6,0,0,0" FontSize="12"/>
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource Button.Secondary}" Command="{Binding ConfirmFalsePositiveCommand}" Padding="12,6" Margin="0,0,8,6"
+                      Visibility="{Binding SelectedItem.IsFalsePositive, Converter={StaticResource BoolToVisibility}}"
+                      ToolTip="Record FalsePositive in the Second Brain; later scans keep this verdict">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE8FB;" Style="{StaticResource Text.Icon}" FontSize="12"/>
+                  <TextBlock Text="Confirm false positive" Margin="6,0,0,0" FontSize="12"/>
+                </StackPanel>
+              </Button>
+            </WrapPanel>
+
+            <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,4,0,0"/>
+
+            <StackPanel Visibility="{Binding HasProposal, Converter={StaticResource BoolToVisibility}}" Margin="0,12,0,0">
+              <Border Style="{StaticResource Inset}" Background="{DynamicResource Brush.WarningSoft}">
+                <TextBlock Text="AI proposal — review it like a pull request from someone you do not know. Nothing is written until you click Apply."
+                           Style="{StaticResource Text.Base}" Foreground="{DynamicResource Brush.Warning}" TextWrapping="Wrap"/>
+              </Border>
+              <TextBlock Text="CLAUDE'S EXPLANATION" Style="{StaticResource Text.Label}" Margin="0,12,0,4"/>
+              <TextBlock Text="{Binding Explanation}" Style="{StaticResource Text.Wrap}"/>
+              <TextBlock Text="{Binding Footer}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <StackPanel Visibility="{Binding HasDiff, Converter={StaticResource BoolToVisibility}}" Margin="0,14,0,0">
+              <Grid>
+                <TextBlock Text="PROPOSED CHANGE" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding DiffSummary}" Style="{StaticResource Text.Caption}" HorizontalAlignment="Right" FontFamily="{StaticResource Font.Code}"/>
+              </Grid>
+              <Border Style="{StaticResource Inset}" Padding="0,4" Margin="0,6,0,0">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                  <ItemsControl ItemsSource="{Binding DiffRows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Style="{StaticResource DiffRow}">
+                          <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding OldNumber}" Style="{StaticResource DiffNumber}" Width="40"/>
+                            <TextBlock Text="{Binding NewNumber}" Style="{StaticResource DiffNumber}" Width="40"/>
+                            <TextBlock Text="{Binding Prefix}" Style="{StaticResource DiffText}" Width="14"/>
+                            <TextBlock Text="{Binding Text}" Style="{StaticResource DiffText}"/>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Border>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+        <StackPanel VerticalAlignment="Center" Visibility="{Binding HasSelectedItem, Converter={StaticResource InverseBoolToVisibility}}">
+          <TextBlock Text="Fix Proposal" Style="{StaticResource Text.Section}" HorizontalAlignment="Center"/>
+          <TextBlock Text="Select a finding, then ask Claude for a fix. You review the change as a diff before anything is written."
+                     Style="{StaticResource Text.Wrap}" TextAlignment="Center" Margin="0,6,0,0"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

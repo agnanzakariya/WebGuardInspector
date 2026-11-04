@@ -5,6 +5,7 @@ using WebGuard.AI;
 using WebGuard.Core;
 using WebGuard.Core.Detection;
 using WebGuard.Core.Findings;
+using WebGuard.Core.Fixing;
 using WebGuard.Core.Intelligence;
 using WebGuard.Desktop.Services;
 using WebGuard.Detection;
@@ -58,9 +59,10 @@ public partial class App : Application
             new ThreatFoxHashIntelligence(http, cache, Intelligence),
         ];
 
+        var processRunner = new ExternalProcessRunner();
         IReadOnlyList<ISecurityEngine> engines =
         [
-            .. SecurityEngineCatalog.CreateDefault(new ExternalProcessRunner(), id => settings.Current.ToolOptions(id)),
+            .. SecurityEngineCatalog.CreateDefault(processRunner, id => settings.Current.ToolOptions(id)),
             new MalwareHashLookupEngine(malware),
         ];
         IFindingEnricher[] enrichers = [new KnownExploitedEnricher(kev, Intelligence)];
@@ -91,12 +93,17 @@ public partial class App : Application
 
         var catalog = new EngineCatalogViewModel(engines);
         var findings = new FindingsViewModel(catalog, analyst, secondBrain, settings, launcher);
+        var fixer = new ClaudeCodeFixer(processRunner,
+            () => new ClaudeCodeSettings(settings.Current.ClaudeFixEnabled, settings.Current.ClaudeCliPath, settings.Current.ClaudeModel),
+            () => ExecutableLocator.Find(["claude"]));
+        var fixing = new FixingViewModel(findings, fixer, new FixApplier(FixApplier.DefaultBackupRoot), secondBrain, settings);
 
         return new ShellViewModel(
             workspace,
             new OverviewViewModel(workspace, findings, catalog),
             new LocalScannerViewModel(workspace, settings),
             findings,
+            fixing,
             new AiAnalystViewModel(analyst, mcp, workspace, clipboard),
             new SecondBrainViewModel(secondBrain, launcher),
             new IntelligenceViewModel(vulnerabilities, malware),

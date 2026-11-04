@@ -13,7 +13,7 @@ using WebGuard.Presentation.Services;
 
 namespace WebGuard.Presentation.ViewModels;
 
-public enum PageKey { Overview, LocalScanner, Findings, AiAnalyst, SecondBrain, Intelligence, ScanHistory, Settings }
+public enum PageKey { Overview, LocalScanner, Findings, Fixing, AiAnalyst, SecondBrain, Intelligence, ScanHistory, Settings }
 
 public abstract class PageViewModel : ObservableObject
 {
@@ -102,22 +102,41 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         }
     }
 
-    /// <summary>Records a verdict in the Second Brain and shows it on the finding.</summary>
-    internal async Task SetStatusAsync(SecurityFinding finding, ValidationStatus status)
+    /// <summary>Raised after a scan is loaded.</summary>
+    public event EventHandler<ScanReport>? ReportLoaded;
+
+    /// <summary>Raised after a verdict is recorded, with the updated finding.</summary>
+    public event EventHandler<SecurityFinding>? StatusRecorded;
+
+    /// <summary>The loaded scan, or null before the first scan.</summary>
+    public ScanReport? Report => _report;
+
+    /// <summary>All findings of the loaded scan with their current verdicts.</summary>
+    public IReadOnlyList<SecurityFinding> AllFindings => _all;
+
+    /// <summary>Records a verdict in the Second Brain and shows it on the finding. Returns false when it could not be recorded.</summary>
+    internal async Task<bool> SetStatusAsync(SecurityFinding finding, ValidationStatus status, string? note = null)
     {
-        if (_secondBrain is null) return;
+        if (_secondBrain is null)
+        {
+            ValidationMessage = "Set a Second Brain vault in Settings to record verdicts.";
+            return false;
+        }
         try
         {
             await _secondBrain.RecordValidationAsync(
-                new ValidationRecord(finding.Fingerprint, status, Environment.UserName, null, DateTimeOffset.UtcNow), CancellationToken.None).ConfigureAwait(true);
+                new ValidationRecord(finding.Fingerprint, status, Environment.UserName, note, DateTimeOffset.UtcNow), CancellationToken.None).ConfigureAwait(true);
             _all = _all.Select(f => f.Fingerprint == finding.Fingerprint ? f with { Status = status } : f).ToArray();
             Rebuild(finding.Fingerprint);
             ValidationMessage = $"Marked {status} in the Second Brain.";
+            StatusRecorded?.Invoke(this, finding with { Status = status });
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             ValidationMessage = "Could not record the verdict: " + ex.Message;
             OnPropertyChanged(nameof(SelectedStatus));
+            return false;
         }
     }
 
@@ -268,6 +287,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         OnPropertyChanged(nameof(EmptyTitle));
         OnPropertyChanged(nameof(EmptyMessage));
         Rebuild();
+        ReportLoaded?.Invoke(this, report);
     }
 
     private void Rebuild(string? keepFingerprint = null)
@@ -653,6 +673,9 @@ public sealed class SettingsViewModel : PageViewModel
     private bool _autoRecord;
     private readonly IFolderPicker? _folderPicker;
     private string _saveMessage = string.Empty;
+    private bool _claudeFixEnabled;
+    private string _claudeCliPath = string.Empty;
+    private string _claudeModel = string.Empty;
 
     public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines, IFolderPicker? folderPicker = null)
     {
@@ -697,6 +720,9 @@ public sealed class SettingsViewModel : PageViewModel
     public string VaultPath { get => _vaultPath; set => SetProperty(ref _vaultPath, value?.Trim().Trim('"') ?? string.Empty); }
     public bool AutoRecord { get => _autoRecord; set => SetProperty(ref _autoRecord, value); }
     public ICommand BrowseVaultCommand { get; }
+    public bool ClaudeFixEnabled { get => _claudeFixEnabled; set => SetProperty(ref _claudeFixEnabled, value); }
+    public string ClaudeCliPath { get => _claudeCliPath; set => SetProperty(ref _claudeCliPath, value?.Trim().Trim('"') ?? string.Empty); }
+    public string ClaudeModel { get => _claudeModel; set => SetProperty(ref _claudeModel, value?.Trim() ?? string.Empty); }
 
     /// <summary>Executable path (empty = auto-detect) and on/off switch per CLI engine.</summary>
     public ObservableCollection<EngineSettingViewModel> EngineSettings { get; } = [];
@@ -736,6 +762,12 @@ public sealed class SettingsViewModel : PageViewModel
             return;
         }
 
+        if (ClaudeCliPath.Length > 0 && !Path.IsPathFullyQualified(ClaudeCliPath))
+        {
+            SaveMessage = "Claude Code: path to claude.exe must be absolute (or empty to auto-detect).";
+            return;
+        }
+
         var badPath = EngineSettings.FirstOrDefault(e => e.ExecutablePath.Length > 0 && !Path.IsPathFullyQualified(e.ExecutablePath));
         if (badPath is not null)
         {
@@ -760,6 +792,9 @@ public sealed class SettingsViewModel : PageViewModel
             AiModel = AiModel.Length == 0 ? null : AiModel,
             SecondBrainVaultPath = VaultPath.Length == 0 ? null : VaultPath,
             SecondBrainAutoRecord = AutoRecord,
+            ClaudeFixEnabled = ClaudeFixEnabled,
+            ClaudeCliPath = ClaudeCliPath.Length == 0 ? null : ClaudeCliPath,
+            ClaudeModel = ClaudeModel.Length == 0 ? null : ClaudeModel,
             EngineExecutables = EngineSettings.Where(e => e.ExecutablePath.Length > 0)
                 .ToDictionary(e => e.Id, e => e.ExecutablePath, StringComparer.OrdinalIgnoreCase),
             DisabledEngines = EngineSettings.Where(e => !e.Enabled).Select(e => e.Id).ToArray(),
@@ -780,6 +815,9 @@ public sealed class SettingsViewModel : PageViewModel
         AiEndpoint = defaults.AiEndpoint;
         AiModel = string.Empty;
         AutoRecord = defaults.SecondBrainAutoRecord;
+        ClaudeFixEnabled = defaults.ClaudeFixEnabled;
+        ClaudeCliPath = string.Empty;
+        ClaudeModel = string.Empty;
         foreach (var engine in EngineSettings)
         {
             engine.ExecutablePath = string.Empty;
@@ -800,6 +838,9 @@ public sealed class SettingsViewModel : PageViewModel
         AiModel = s.AiModel ?? string.Empty;
         VaultPath = s.SecondBrainVaultPath ?? string.Empty;
         AutoRecord = s.SecondBrainAutoRecord;
+        ClaudeFixEnabled = s.ClaudeFixEnabled;
+        ClaudeCliPath = s.ClaudeCliPath ?? string.Empty;
+        ClaudeModel = s.ClaudeModel ?? string.Empty;
         EngineSettings.Clear();
         foreach (var engine in EngineCatalog.Engines.Where(e => !string.Equals(e.Id, "malware-hash", StringComparison.Ordinal)))
         {

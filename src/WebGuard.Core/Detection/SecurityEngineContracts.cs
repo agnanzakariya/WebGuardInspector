@@ -89,6 +89,7 @@ public sealed record ProcessRunRequest(
     string WorkingDirectory,
     TimeSpan Timeout,
     long MaxOutputBytes,
-    IReadOnlyDictionary<string, string>? Environment = null);
+    IReadOnlyDictionary<string, string>? Environment = null,
+    string? StandardInput = null);
 
 public sealed record ProcessRunResult(int ExitCode, string StandardOutput, string StandardError, TimeSpan Duration, bool TimedOut, bool OutputTruncated);

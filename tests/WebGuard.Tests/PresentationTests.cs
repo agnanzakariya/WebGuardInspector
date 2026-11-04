@@ -154,6 +154,7 @@ public static class PresentationTests
             new OverviewViewModel(workspace, findings, catalog),
             new LocalScannerViewModel(workspace, settings),
             findings,
+            new FixingViewModel(findings, null, new WebGuard.Core.Fixing.FixApplier(temp.Path)),
             new AiAnalystViewModel(new WebGuard.AI.PlannedAiSecurityAnalyst(), new WebGuard.AI.PlannedMcpServerHost()),
             new SecondBrainViewModel(new WebGuard.Persistence.PlannedSecondBrainRepository()),
             new IntelligenceViewModel(new WebGuard.Intelligence.PlannedVulnerabilityIntelligence(), [new WebGuard.Intelligence.PlannedMalwareHashIntelligence()]),

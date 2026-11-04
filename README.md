@@ -1,4 +1,4 @@
-# WebGuard Inspector v0.5.0 — Local Source Security Workspace
+# WebGuard Inspector v0.6.0 — Local Source Security Workspace
 
 Aplikasi desktop Windows (WPF, .NET 10) untuk inspeksi keamanan source code secara lokal.
 Setelah inventory + SHA-256, aplikasi menjalankan engine deteksi (Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup
@@ -6,6 +6,8 @@ threat intelligence (OSV.dev, CISA KEV, MalwareBazaar, ThreatFox), lalu menampil
 Phase 3 menambahkan AI Analyst dengan model lokal dan server **MCP** lokal untuk agen AI (Claude Code, LM Studio, Cursor, …).
 v0.5 menambahkan **Phase 4 — Second Brain**: setiap scan (termasuk yang aman), temuan, analisis AI dan keputusan validasi
 dicatat sebagai catatan Markdown yang saling terhubung di vault **Obsidian**.
+v0.6 menambahkan **Fixing**: Claude (lewat Claude Code CLI dengan login Anda) mengusulkan perbaikan per temuan, Anda meninjau
+diff-nya, lalu Apply dengan backup dan Undo. Temuan yang dinilai false positive hanya diusulkan sampai Anda konfirmasi.
 
 > **Catatan:** engine adalah tool CLI eksternal yang harus di-install sendiri (lihat *Engine Phase 2*).
 > Engine yang tidak ter-install dilaporkan sebagai *Not installed* dan scan tetap berjalan.
@@ -43,6 +45,7 @@ dicatat sebagai catatan Markdown yang saling terhubung di vault **Obsidian**.
 | Temuan yang hilang di scan berikutnya ditandai `present: false` ("likely fixed"); muncul lagi = regresi | Implemented (Phase 4) |
 | Pencarian kata kunci + semantik (embedding lokal nomic-embed via LM Studio) | Implemented (Phase 4) |
 | Tool MCP `search_similar_findings`, `save_security_finding` | Implemented (Phase 4) |
+| Fixing: usulan perbaikan dari Claude Code CLI, diff, Apply dengan backup, Undo, saran false positive | Implemented (v0.6) |
 | Model `SecurityFinding`, `FindingFingerprint`, `SecretRedactor`, `ValidationStatus` | Implemented |
 
 ## Persyaratan
@@ -60,7 +63,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 59 tests
+.\build.ps1          # restore + build + 67 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -72,7 +75,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 59 tests
+PASS: 67 tests
 PASS: build and tests completed
 ```
 
@@ -99,13 +102,13 @@ src/
   WebGuard.Scanner       LocalFolderScanner, JsonReportExporter, InMemoryScanHistoryStore
   WebGuard.Detection     SemgrepEngine, GitleaksEngine, OsvScannerEngine, YaraXEngine + rule bawaan
   WebGuard.Intelligence  OSV.dev, CISA KEV, MalwareBazaar, ThreatFox, cache intelligence
-  WebGuard.AI            LocalAiSecurityAnalyst, LocalEmbeddingService, OpenAiCompatibleClient, StdioMcpServerHost
+  WebGuard.AI            LocalAiSecurityAnalyst, LocalEmbeddingService, OpenAiCompatibleClient, StdioMcpServerHost, ClaudeCodeFixer
   WebGuard.Mcp           Server MCP stdio (WebGuard.Mcp.exe): McpServer, McpToolset, McpAuditLog
   WebGuard.Persistence   ObsidianSecondBrain (vault Markdown), MarkdownNote
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (59 tests)
+  WebGuard.Tests         Test runner tanpa dependency (67 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -187,6 +190,29 @@ Rules/<engine> — <rule>.md         semua temuan sebuah aturan + catatan tim te
 - Scan tanpa engine yang berjalan dicatat sebagai `not-analyzed`, bukan "aman".
 - Secret selalu diredaksi sebelum ditulis; embedding untuk pencarian disimpan di `.webguard/` (diabaikan Obsidian).
 
+## Fixing dengan Claude (v0.6)
+
+Butuh Claude Code CLI yang sudah login dengan akun Claude Anda:
+
+```powershell
+irm https://claude.ai/install.ps1 | iex          # memasang %USERPROFILE%\.local\bin\claude.exe
+& "$env:USERPROFILE\.local\bin\claude.exe"      # sekali saja: pilih login akun Claude (/login)
+```
+
+Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude** untuk satu temuan atau
+**Fix all open findings** untuk semua yang belum dijawab. Path `claude.exe` dan model (mis. `sonnet`, `opus`) bisa diatur di
+**Settings → Fixing with Claude**.
+
+- Yang dikirim ke Anthropic hanya file tempat temuan berada, sudah diredaksi. Claude dijalankan dengan `--tools ""`,
+  `--strict-mcp-config`, `--setting-sources ""`, dari folder sementara yang kosong: ia tidak bisa membaca proyek, menjalankan
+  perintah, atau mengubah file. Jawabannya JSON (dicek dengan `--json-schema`) berisi edit teks yang persis.
+- Edit diterapkan semua atau tidak sama sekali; setiap `old_text` harus cocok tepat satu kali. `[REDACTED]` dicocokkan
+  sebagai wildcard dan nilai aslinya dikembalikan, jadi teks `[REDACTED]` tidak pernah tertulis ke kode.
+- **Apply** menyalin file asli ke `%LOCALAPPDATA%\WebGuardInspector\fix-backups` (di luar proyek), menjaga BOM dan CRLF, lalu
+  mencatat status `Fixed` di Second Brain. **Undo** mengembalikan file asli (ditolak bila file sudah berubah lagi).
+- Verdict `false_positive` hanya saran; **Confirm false positive** mencatat `FalsePositive`. File biner, non-UTF-8 atau
+  lebih dari 1 MB tidak dikirim dan ditandai *Needs manual action*.
+
 ## Prinsip keamanan
 
 - Read-only: aplikasi tidak pernah mengeksekusi, memodifikasi, atau mengunggah file yang dipindai.
@@ -196,6 +222,12 @@ Rules/<engine> — <rule>.md         semua temuan sebuah aturan + catatan tim te
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.6.0** — Fixing dengan Claude
+- Halaman Fixing: usulan perbaikan per temuan lewat Claude Code CLI (tanpa tool, tanpa akses proyek), diff, Apply dengan backup, Undo.
+- `FixPatcher` (edit persis, sadar redaksi, all-or-nothing) dan `FixApplier` (backup di luar proyek, BOM/CRLF dijaga).
+- Saran false positive dengan konfirmasi; usulan disimpan sebagai analisis AI di Second Brain (diff diredaksi).
+- `ExternalProcessRunner` dapat mengirim stdin. 67 tests; diuji live dengan Claude Code 2.1.317.
 
 **0.5.0** — Phase 4 (Second Brain)
 - `ObsidianSecondBrain`: catatan Markdown di vault Obsidian untuk setiap scan (termasuk yang aman), temuan, proyek, aturan, dashboard.
