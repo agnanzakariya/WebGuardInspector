@@ -116,7 +116,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
                 await fixing.RefreshAsync().ConfigureAwait(true);
                 await secondBrain.RefreshAsync().ConfigureAwait(true);
                 await Engines.RefreshAsync().ConfigureAwait(true);
-                if (About is not null) await About.CheckOnStartupAsync().ConfigureAwait(true);
+                await CheckForUpdatesOnStartupAsync().ConfigureAwait(true);
             };
             settingsPage.SetupRequested += (_, _) =>
             {
@@ -186,7 +186,19 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         {
             await About.RefreshComponentsAsync().ConfigureAwait(true);
             // Not during first-run setup: the person has not yet decided whether update checks are allowed.
-            if (!IsSetupRequired) await About.CheckOnStartupAsync().ConfigureAwait(true);
+            if (!IsSetupRequired) await CheckForUpdatesOnStartupAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Daily app update check, then the component check; offers to open Settings → Components when needed.</summary>
+    private async Task CheckForUpdatesOnStartupAsync()
+    {
+        if (About is null || !await About.CheckOnStartupAsync().ConfigureAwait(true)) return;
+        var settingsPage = Page<SettingsViewModel>();
+        if (settingsPage.Components is { } components && await components.CheckOnStartupAsync().ConfigureAwait(true))
+        {
+            Navigate(PageKey.Settings);
+            settingsPage.ShowComponents();
         }
     }
 

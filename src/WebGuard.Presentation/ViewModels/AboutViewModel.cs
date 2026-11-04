@@ -194,12 +194,13 @@ public sealed class AboutViewModel : ObservableObject
     public AsyncRelayCommand InstallUpdateCommand { get; }
     public ICommand OpenReleaseCommand { get; }
 
-    /// <summary>Start-up check: only when enabled and the last check is older than about a day.</summary>
-    public async Task CheckOnStartupAsync(CancellationToken cancellationToken = default)
+    /// <summary>Start-up check: only when enabled and the last check is older than about a day. Returns true when it ran.</summary>
+    public async Task<bool> CheckOnStartupAsync(CancellationToken cancellationToken = default)
     {
-        if (_updates is null || !_settings.Current.CheckForUpdates) return;
-        if (_settings.Current.LastUpdateCheckUtc is { } last && _time.GetUtcNow() - last < StartupCheckInterval) return;
+        if (_updates is null || !_settings.Current.CheckForUpdates) return false;
+        if (_settings.Current.LastUpdateCheckUtc is { } last && _time.GetUtcNow() - last < StartupCheckInterval) return false;
         await CheckAsync(cancellationToken).ConfigureAwait(true);
+        return true;
     }
 
     public async Task CheckAsync(CancellationToken cancellationToken = default)
@@ -269,7 +270,6 @@ public sealed class AboutViewModel : ObservableObject
             new(".NET runtime", Environment.Version.ToString(), RuntimeInformation.FrameworkDescription + " · " + RuntimeInformation.ProcessArchitecture, StatusTone.Neutral),
             new("Windows", Environment.OSVersion.Version.ToString(), RuntimeInformation.OSDescription.Trim(), StatusTone.Neutral),
         };
-        if (_fixer is not null) rows.Add(Row("Claude Code", await _fixer.GetStatusAsync(cancellationToken).ConfigureAwait(true)));
         if (_analyst is not null) rows.Add(Row("Local AI analyst", await _analyst.GetStatusAsync(cancellationToken).ConfigureAwait(true)));
         Components.Clear();
         foreach (var row in rows) Components.Add(row);

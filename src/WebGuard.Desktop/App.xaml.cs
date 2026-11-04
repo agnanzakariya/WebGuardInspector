@@ -116,6 +116,12 @@ public partial class App : Application
                 StdioMcpServerHost.BundledExecutablePath,
                 Path.Combine(AppContext.BaseDirectory, "tools", "licenses")),
             updates, analyst, fixer, launcher, dialogs, new InstallerLauncher());
+        var componentHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        componentHttp.DefaultRequestHeaders.UserAgent.ParseAdd($"WebGuardInspector/{AppInfo.Version}");
+        var components = new ComponentsViewModel(engines, catalog,
+            new ComponentUpdateService(componentHttp, processRunner, Path.Combine(AppContext.BaseDirectory, "tools"),
+                () => ExecutableLocator.Find(["winget"])),
+            fixer, dialogs);
 
         return new ShellViewModel(
             workspace,
@@ -127,7 +133,7 @@ public partial class App : Application
             new SecondBrainViewModel(secondBrain, launcher),
             new IntelligenceViewModel(vulnerabilities, malware),
             new ScanHistoryViewModel(history),
-            new SettingsViewModel(settings, theme, catalog, folderPicker, about),
+            new SettingsViewModel(settings, theme, catalog, folderPicker, about, components),
             catalog,
             settings,
             theme,

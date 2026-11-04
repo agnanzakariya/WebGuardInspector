@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.8.0
+# Azura — WebGuard Inspector v0.9.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -88,6 +88,25 @@ Wizard bisa diulang dari **Settings → Run setup wizard**.
   MCP server, runtime .NET, Windows, Claude Code, AI lokal, semua engine), lokasi data dengan tombol **Open** (instalasi,
   settings, log, backup Fixing, unduhan update, cache intelijen, vault) dan lisensi pihak ketiga.
 
+### Components (Settings)
+
+Kartu **Components** menampilkan versi terpasang dan versi terbaru Semgrep, Gitleaks, OSV-Scanner, YARA-X dan Claude Code
+(versi terbaru dari GitHub Releases, PyPI dan npm; hanya metadata publik yang diminta). Setiap komponen di-update sesuai
+cara pemasangannya, sehingga yang diperbarui selalu salinan yang benar-benar dipakai Azura:
+
+| Sumber | Cara update |
+| --- | --- |
+| Bawaan installer (`<app>\tools`) | Unduh aset rilis resmi GitHub, cocokkan SHA-256 dengan digest GitHub, ganti exe |
+| winget | `winget upgrade --id <paket>` |
+| pip (Semgrep) | `python -m pip install --upgrade semgrep` dengan Python pemilik `semgrep.exe` |
+| Claude Code | `claude update` |
+| Lainnya | Ditandai *installed manually*; update dengan cara Anda memasangnya |
+
+Pengecekan berjalan bersama cek update aplikasi (saat start, maks. sekali sehari, bila diizinkan) atau lewat
+**Check components**. Bila ada versi baru, muncul popup yang menawarkan membuka **Settings → Components**; di sana tersedia
+tombol **Update** per komponen dan **Update all**. Bila aplikasi dipasang untuk semua user (Program Files), folder `tools`
+hanya bisa diganti dengan hak administrator.
+
 ### Merilis versi baru
 
 1. Naikkan `<Version>` di `Directory.Build.props` dan `AppInfo.Version`.
@@ -119,7 +138,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 78 tests
+.\build.ps1          # restore + build + 82 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -131,7 +150,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 78 tests
+PASS: 82 tests
 PASS: build and tests completed
 ```
 
@@ -164,7 +183,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (78 tests)
+  WebGuard.Tests         Test runner tanpa dependency (82 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -297,6 +316,12 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.9.0** — Update komponen
+- `ComponentUpdateService`: versi terbaru Semgrep (PyPI), Gitleaks/OSV-Scanner/YARA-X (GitHub) dan Claude Code (npm); update sesuai
+  sumber instalasi (aset GitHub dengan verifikasi SHA-256, winget, pip, `claude update`).
+- Settings → Components dengan Update per komponen dan Update all; popup saat start bila ada versi baru, membuka Components.
+- About menampilkan Environment (aplikasi, MCP server, .NET, Windows, AI lokal). 82 tests.
 
 **0.8.0** — Updates dan About
 - `GitHubUpdateService`: cek GitHub Releases (harian saat start bila diizinkan, atau manual), unduh installer hanya dari rilis repo

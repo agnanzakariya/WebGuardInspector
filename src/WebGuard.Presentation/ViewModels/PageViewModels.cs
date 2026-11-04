@@ -678,9 +678,10 @@ public sealed class SettingsViewModel : PageViewModel
     private string _claudeModel = string.Empty;
 
     public SettingsViewModel(SettingsService settings, IThemeService theme, EngineCatalogViewModel engines, IFolderPicker? folderPicker = null,
-        AboutViewModel? about = null)
+        AboutViewModel? about = null, ComponentsViewModel? components = null)
     {
         About = about;
+        Components = components;
         _folderPicker = folderPicker;
         BrowseVaultCommand = new RelayCommand(() =>
         {
@@ -712,6 +713,22 @@ public sealed class SettingsViewModel : PageViewModel
     /// <summary>Updates and About; null when the host does not provide them (tests).</summary>
     public AboutViewModel? About { get; }
     public bool HasAbout => About is not null;
+
+    /// <summary>Component versions and updates; null when the host does not provide them (tests).</summary>
+    public ComponentsViewModel? Components { get; }
+    public bool HasComponents => Components is not null;
+
+    /// <summary>Asks the view to scroll to the Components card (after the start-up popup).</summary>
+    public event EventHandler? ComponentsRequested;
+
+    /// <summary>Set until the view has scrolled to Components; the page view may be created after the request.</summary>
+    public bool ComponentsScrollPending { get; set; }
+
+    public void ShowComponents()
+    {
+        ComponentsScrollPending = true;
+        ComponentsRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>Opens the first-run setup wizard again.</summary>
     public ICommand RunSetupCommand { get; }

@@ -152,6 +152,59 @@
         </StackPanel>
       </Border>
 
+      <!-- Components -->
+      <Border x:Name="ComponentsCard" Style="{StaticResource Card}" Margin="0,0,0,12" DataContext="{Binding Components}"
+              Visibility="{Binding DataContext.HasComponents, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <Grid>
+            <TextBlock Text="COMPONENTS" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+              <Button Style="{StaticResource Button.Secondary}" Content="Check components" Command="{Binding CheckCommand}" Padding="12,4"/>
+              <Button Style="{StaticResource Button.Primary}" Content="Update all" Command="{Binding UpdateAllCommand}" Padding="12,4" Margin="8,0,0,0"/>
+            </StackPanel>
+          </Grid>
+          <TextBlock Text="{Binding Status}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,10,0,4"/>
+          <ProgressBar IsIndeterminate="True" Height="4" Margin="0,4,0,4" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+          <ItemsControl ItemsSource="{Binding Rows}" Focusable="False" Margin="0,6,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Style="{StaticResource Inset}" Margin="0,0,0,8">
+                  <StackPanel>
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <StackPanel>
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+                        <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap">
+                          <Run Text="Installed "/><Run Text="{Binding InstalledText, Mode=OneWay}" FontFamily="{StaticResource Font.Code}"/>
+                          <Run Text=" · latest "/><Run Text="{Binding LatestText, Mode=OneWay}" FontFamily="{StaticResource Font.Code}"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding SourceText}" Style="{StaticResource Text.Caption}"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" HorizontalAlignment="Right" Margin="8,0,0,0">
+                        <Border Style="{StaticResource Pill.Tone}" HorizontalAlignment="Right">
+                          <TextBlock Text="{Binding StatusText}" Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold"/>
+                        </Border>
+                        <Button Style="{StaticResource Button.Secondary}" Content="Update" Command="{Binding UpdateCommand}" Padding="12,3" Margin="0,6,0,0"
+                                HorizontalAlignment="Right" Visibility="{Binding State.UpdateAvailable, Converter={StaticResource BoolToVisibility}}"/>
+                      </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding Note}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                               Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}"/>
+                    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,6,0,0" Visibility="{Binding IsUpdating, Converter={StaticResource BoolToVisibility}}"/>
+                    <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
+                     Text="Each tool is updated the way it was installed: bundled tools from their official GitHub release (SHA-256 checked), winget packages with winget, Semgrep with pip, Claude Code with claude update."/>
+        </StackPanel>
+      </Border>
+
       <!-- About -->
       <Border Style="{StaticResource Card}" Margin="0,0,0,12" DataContext="{Binding About}"
               Visibility="{Binding DataContext.HasAbout, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
@@ -176,7 +229,7 @@
           </StackPanel>
 
           <Grid Margin="0,18,0,6">
-            <TextBlock Text="COMPONENTS" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+            <TextBlock Text="ENVIRONMENT" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
             <Button Style="{StaticResource Button.Link}" Content="Refresh" Command="{Binding RefreshComponentsCommand}" HorizontalAlignment="Right"/>
           </Grid>
           <ItemsControl ItemsSource="{Binding Components}" Focusable="False">
@@ -193,32 +246,6 @@
                   </StackPanel>
                   <Border Grid.Column="1" Style="{StaticResource Pill.Tone}" VerticalAlignment="Top" Margin="8,0,0,0">
                     <TextBlock Text="{Binding Version}" Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold"/>
-                  </Border>
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <ItemsControl ItemsSource="{Binding EngineCatalog.Engines}" Focusable="False">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Grid Margin="0,0,0,8">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                  </Grid.ColumnDefinitions>
-                  <StackPanel>
-                    <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding Category}" Style="{StaticResource Text.Caption}"/>
-                  </StackPanel>
-                  <Border Grid.Column="1" Style="{StaticResource Pill.Tone}" VerticalAlignment="Top" Margin="8,0,0,0">
-                    <TextBlock Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold">
-                      <TextBlock.Text>
-                        <PriorityBinding>
-                          <Binding Path="Version"/>
-                          <Binding Path="Availability"/>
-                        </PriorityBinding>
-                      </TextBlock.Text>
-                    </TextBlock>
                   </Border>
                 </Grid>
               </DataTemplate>
