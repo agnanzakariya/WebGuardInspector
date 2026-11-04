@@ -16,6 +16,18 @@ diff-nya, lalu Apply dengan backup dan Undo. Temuan yang dinilai false positive 
 > Engine yang tidak ter-install dilaporkan sebagai *Not installed* dan scan tetap berjalan.
 > AI Analyst butuh server model lokal (LM Studio/Ollama) — lihat *AI Analyst dan MCP*. Second Brain butuh vault Obsidian — lihat *Second Brain (Phase 4)*.
 
+## Screenshot
+
+**Overview** — pilih folder, scan (inventory + SHA-256 + engine), lalu lihat file dan temuan sekaligus:
+
+![Azura — Overview setelah scan proyek demo](docs/screenshots/overview.png)
+
+**Findings** — temuan per tingkat keparahan dengan bukti, referensi CWE, saran perbaikan, validasi dan AI Analyst:
+
+![Azura — halaman Findings](docs/screenshots/findings.png)
+
+*Proyek demo fiktif (`demo-shop`) dengan celah PHP yang disengaja.*
+
 ## Fitur
 
 | Fitur | Status |
