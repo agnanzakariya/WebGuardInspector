@@ -671,13 +671,14 @@ public sealed partial class ObsidianSecondBrain(Func<SecondBrainSettings> settin
     private static void WriteNote(string path, MarkdownNote note)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temp = path + ".webguard-tmp";
-        File.WriteAllText(temp, note.Render(), new UTF8Encoding(false));
+        // Written in place, not via temp file + rename: Obsidian's file watcher drops many rename events when a scan
+        // writes dozens of notes at once, and those notes then stay invisible ("not found") until Obsidian restarts.
+        var bytes = new UTF8Encoding(false).GetBytes(note.Render());
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                File.Move(temp, path, overwrite: true);
+                File.WriteAllBytes(path, bytes);
                 return;
             }
             catch (IOException) when (attempt < 4)

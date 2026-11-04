@@ -243,6 +243,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
   serta kredensial hardcoded, hash password lemah, TLS off, `preg_replace` /e, remote code load, `extract`).
 - 7 rule YARA-X untuk obfuscation/backdoor PHP dan admin WordPress tersembunyi.
 - Evidence Semgrep kini diredaksi; redactor juga menangkap `define('KEY', '…')` dan `'password' => '…'`. 70 tests.
+- Catatan Second Brain ditulis langsung (tanpa file sementara + rename): Obsidian melewatkan event rename saat scan menulis
+  banyak catatan sekaligus, sehingga sebagian catatan "not found" sampai Obsidian di-reload.
 
 **0.6.0** — Fixing dengan Claude
 - Halaman Fixing: usulan perbaikan per temuan lewat Claude Code CLI (tanpa tool, tanpa akses proyek), diff, Apply dengan backup, Undo.
