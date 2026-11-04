@@ -48,6 +48,12 @@ public abstract partial class ExternalToolEngine : ISecurityEngine
 
     protected virtual string InstallHint => $"Install {Info.DisplayName} or set its executable path in Settings.";
 
+    /// <summary>Something besides the executable the engine needs (e.g. a signature database); null when all is there.</summary>
+    protected virtual string? MissingPrerequisite() => null;
+
+    /// <summary>Status text when the engine is ready; the executable path by default.</summary>
+    protected virtual string ReadyMessage(string executablePath) => executablePath;
+
     public async Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken)
     {
         var options = _options(Info.Id);
@@ -64,7 +70,8 @@ public abstract partial class ExternalToolEngine : ISecurityEngine
         try
         {
             var version = await ProbeVersionAsync(path, cancellationToken).ConfigureAwait(false);
-            return new EngineStatus(EngineAvailability.Ready, version, path, path);
+            if (MissingPrerequisite() is { } missing) return new EngineStatus(EngineAvailability.Error, version, path, missing);
+            return new EngineStatus(EngineAvailability.Ready, version, path, ReadyMessage(path));
         }
         catch (Exception ex) when (ex is EngineRunException or IOException or System.ComponentModel.Win32Exception)
         {
@@ -82,6 +89,7 @@ public abstract partial class ExternalToolEngine : ISecurityEngine
 
         try
         {
+            if (MissingPrerequisite() is { } missing) return Failed(missing, sw.Elapsed);
             progress?.Report(new EngineProgress(Info.Id, $"Running {Info.DisplayName}…", null));
             var version = await ProbeVersionAsync(path, cancellationToken).ConfigureAwait(false);
             var invocation = new EngineInvocation(path, version, ResolveRules(options), request);

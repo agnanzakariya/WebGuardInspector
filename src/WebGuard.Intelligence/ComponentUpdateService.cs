@@ -19,15 +19,22 @@ namespace WebGuard.Intelligence;
 /// </list>
 /// Version lookups only read public metadata (GitHub releases, PyPI, npm); no project data is sent.
 /// </summary>
-public sealed partial class ComponentUpdateService(HttpClient http, IExternalProcessRunner runner, string bundledToolsFolder, Func<string?> locateWinget)
+public sealed partial class ComponentUpdateService(HttpClient http, IExternalProcessRunner runner, string bundledToolsFolder, Func<string?> locateWinget,
+    IReadOnlyList<ISignatureDatabase>? signatureDatabases = null, TimeProvider? timeProvider = null)
     : IComponentUpdater
 {
+    /// <summary>A signature database older than this is offered (and at start-up applied) as an update.</summary>
+    public static readonly TimeSpan SignatureMaxAge = TimeSpan.FromHours(20);
+    private readonly IReadOnlyList<ISignatureDatabase> _databases = signatureDatabases ?? [];
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+
     private static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan UpdateTimeout = TimeSpan.FromMinutes(10);
     private const long MaxDownloadBytes = 300L * 1024 * 1024;
 
+    /// <param name="ProgramFilesFolder">Folder under Program Files used by the package's own installer (also a winget install).</param>
     private sealed record Spec(string Id, string ExeName, string? GitHubRepo = null, string? WingetId = null, Regex? Asset = null,
-        string? PyPiPackage = null, string? NpmPackage = null);
+        string? PyPiPackage = null, string? NpmPackage = null, string? ProgramFilesFolder = null);
 
     private static readonly Spec[] Specs =
     [
@@ -35,6 +42,7 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
         new("gitleaks", "gitleaks.exe", "gitleaks/gitleaks", "Gitleaks.Gitleaks", GitleaksAsset()),
         new("osv-scanner", "osv-scanner.exe", "google/osv-scanner", "Google.OSVScanner", OsvAsset()),
         new("yara-x", "yr.exe", "VirusTotal/yara-x", "VirusTotal.YARA-X", YaraAsset()),
+        new("clamav", "clamscan.exe", "Cisco-Talos/clamav", "Cisco.ClamAV", ProgramFilesFolder: "ClamAV"),
         new("claude-code", "claude.exe", NpmPackage: "@anthropic-ai/claude-code"),
     ];
 
@@ -45,7 +53,22 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
     {
         ArgumentNullException.ThrowIfNull(installed);
         var tasks = installed.Select(c => CheckOneAsync(c, cancellationToken));
-        return await Task.WhenAll(tasks).ConfigureAwait(false);
+        var states = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return [.. states, .. _databases.Select(CheckDatabase)];
+    }
+
+    private ComponentState CheckDatabase(ISignatureDatabase database)
+    {
+        var state = database.Inspect();
+        var age = state.UpdatedUtc is { } at ? _time.GetUtcNow() - at : (TimeSpan?)null;
+        var due = !state.Present || age is null || age > SignatureMaxAge;
+        var source = state.UpdaterAvailable ? ComponentSource.SignatureUpdater : ComponentSource.Missing;
+        var note = !state.UpdaterAvailable ? "Install ClamAV first; its freshclam downloads the signatures."
+            : !state.Present ? "Not downloaded yet (about 110 MB from database.clamav.net). Press Update."
+            : null;
+        return new ComponentState(database.Id, database.Name, state.Present ? state.Description : null,
+            state.UpdatedUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture),
+            null, source, state.UpdaterAvailable && due, note);
     }
 
     private async Task<ComponentState> CheckOneAsync(InstalledComponent component, CancellationToken cancellationToken)
@@ -98,8 +121,14 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
     public async Task<string> UpdateAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(component);
-        var spec = Specs.FirstOrDefault(s => s.Id == component.Id) ?? throw new InvalidOperationException($"{component.Name} cannot be updated from Azura.");
         if (!component.CanUpdate) throw new InvalidOperationException($"No update to install for {component.Name}.");
+        if (component.Source == ComponentSource.SignatureUpdater)
+        {
+            var database = _databases.FirstOrDefault(d => d.Id == component.Id) ?? throw new InvalidOperationException($"{component.Name} is not managed by Azura.");
+            progress?.Report($"Updating {component.Name} with freshclam…");
+            return await database.UpdateAsync(cancellationToken).ConfigureAwait(false);
+        }
+        var spec = Specs.FirstOrDefault(s => s.Id == component.Id) ?? throw new InvalidOperationException($"{component.Name} cannot be updated from Azura.");
         return component.Source switch
         {
             ComponentSource.Bundled => await UpdateBundledAsync(spec, component, progress, cancellationToken).ConfigureAwait(false),
@@ -246,8 +275,12 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
         var path = component.ExecutablePath;
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return ComponentSource.Missing;
         if (component.Id == "claude-code") return ComponentSource.ClaudeUpdater;
-        if (spec is { GitHubRepo: not null } && IsUnder(path, bundledToolsFolder)) return ComponentSource.Bundled;
+        if (spec is { Asset: not null } && IsUnder(path, bundledToolsFolder)) return ComponentSource.Bundled;
         if (spec is { WingetId: not null } && path.Contains(@"\Microsoft\WinGet\", StringComparison.OrdinalIgnoreCase)) return ComponentSource.Winget;
+        if (spec is { WingetId: not null, ProgramFilesFolder: { } folder } &&
+            (IsUnder(path, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), folder)) ||
+             IsUnder(path, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", folder))))
+            return ComponentSource.Winget;
         if (spec is { PyPiPackage: not null } && path.Contains(@"\Scripts\", StringComparison.OrdinalIgnoreCase) &&
             path.Contains(@"\Python", StringComparison.OrdinalIgnoreCase)) return ComponentSource.Pip;
         return ComponentSource.Manual;
@@ -272,7 +305,14 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
     private Task<ProcessRunResult> RunAsync(string exe, IReadOnlyList<string> args, string workingDirectory, CancellationToken cancellationToken) =>
         runner.RunAsync(new ProcessRunRequest(exe, args, workingDirectory, UpdateTimeout, 1024 * 1024), cancellationToken);
 
-    private static string? Normalise(string? version) => AppVersion.Parse(version) is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : null;
+    /// <summary>"v8.30.1", "8.30.1" or a tag such as "clamav-1.5.4" → "8.30.1" / "1.5.4".</summary>
+    private static string? Normalise(string? version)
+    {
+        if (AppVersion.Parse(version) is { } v) return $"{v.Major}.{v.Minor}.{v.Build}";
+        return version is not null && NumericVersion().Match(version) is { Success: true } m && AppVersion.Parse(m.Value) is { } w
+            ? $"{w.Major}.{w.Minor}.{w.Build}"
+            : null;
+    }
 
     private static string FirstLine(string text) => text.Trim().Split('\n')[0].Trim();
 
@@ -293,4 +333,7 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
 
     [GeneratedRegex(@"^Python(\d)(\d+)$", RegexOptions.IgnoreCase)]
     private static partial Regex PythonFolder();
+
+    [GeneratedRegex(@"\d+\.\d+(\.\d+)?")]
+    private static partial Regex NumericVersion();
 }

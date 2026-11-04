@@ -58,6 +58,7 @@ public static class ExecutableLocator
             foreach (var version in Directory.EnumerateDirectories(pythonRoot, "Python3*").OrderDescending(StringComparer.OrdinalIgnoreCase))
                 yield return Path.Combine(version, "Scripts");
         }
+        yield return Path.Combine(programFiles, "ClamAV");   // ClamAV's MSI (winget Cisco.ClamAV)
         yield return Path.Combine(programFiles, "WebGuardInspector", "tools");
         yield return Path.Combine(AppContext.BaseDirectory, "tools");
     }

@@ -4,7 +4,7 @@ namespace WebGuard.Detection;
 
 public static class SecurityEngineCatalog
 {
-    /// <summary>The Phase 2 CLI engines, in the order they run during a scan.</summary>
+    /// <summary>The CLI engines, in the order they run during a scan.</summary>
     public static IReadOnlyList<ISecurityEngine> CreateDefault(
         IExternalProcessRunner runner,
         Func<string, ExternalToolOptions>? options = null,
@@ -14,5 +14,6 @@ public static class SecurityEngineCatalog
         new GitleaksEngine(runner, options, timeProvider),
         new OsvScannerEngine(runner, options, timeProvider),
         new YaraXEngine(runner, options, timeProvider),
+        new ClamAvEngine(runner, options, timeProvider),
     ];
 }

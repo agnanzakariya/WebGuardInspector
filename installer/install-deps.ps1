@@ -6,6 +6,8 @@
   Gitleaks, OSV-Scanner and YARA-X ship inside the app (tools\), so they are not installed here.
   Everything is installed for the current user only (no administrator rights needed):
     -Semgrep     Python 3 (winget, if missing) + "pip install --user semgrep"
+    -ClamAV      ClamAV (winget Cisco.ClamAV, asks for administrator rights) + its signature database, kept by Azura in
+                 %LOCALAPPDATA%\WebGuardInspector\clamav\db (about 110 MB)
     -ClaudeCode  Claude Code CLI via Anthropic's official installer (sign in afterwards with: claude, then /login)
     -Obsidian    Obsidian (winget)
     -LMStudio    LM Studio (winget; download a chat model inside LM Studio afterwards)
@@ -16,6 +18,7 @@
 [CmdletBinding()]
 param(
   [switch]$Semgrep,
+  [switch]$ClamAV,
   [switch]$ClaudeCode,
   [switch]$Obsidian,
   [switch]$LMStudio,
@@ -98,6 +101,34 @@ if ($Semgrep) {
     $results['Semgrep'] = 'skipped: Python is not available'
   }
   Write-Log "Semgrep: $($results['Semgrep'])"
+}
+
+if ($ClamAV) {
+  Write-Step 'ClamAV (antivirus engine)'
+  $clamDir = Join-Path $env:ProgramFiles 'ClamAV'
+  if (-not (Test-Path (Join-Path $clamDir 'clamscan.exe'))) {
+    if (Test-Winget) {
+      Write-Log 'Installing ClamAV with winget (Cisco.ClamAV); Windows may ask for administrator rights...'
+      winget install --id Cisco.ClamAV --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    }
+  }
+  $freshclam = Join-Path $clamDir 'freshclam.exe'
+  if (Test-Path $freshclam) {
+    # Same layout and settings as Azura's own updater (ClamAvDatabase): a per-user database folder.
+    $root = Join-Path $env:LOCALAPPDATA 'WebGuardInspector\clamav'
+    $db = Join-Path $root 'db'
+    New-Item -ItemType Directory -Force -Path $db | Out-Null
+    $conf = Join-Path $root 'freshclam.conf'
+    $lines = @('# Written by Azura - WebGuard Inspector. Regenerated before every update; edits are overwritten.',
+               "DatabaseDirectory $db", 'DatabaseMirror database.clamav.net', 'ConnectTimeout 30', 'ReceiveTimeout 600')
+    [IO.File]::WriteAllText($conf, ($lines -join "`n") + "`n")
+    Write-Log 'Downloading the ClamAV signature database (about 110 MB)...'
+    & $freshclam "--config-file=$conf" --stdout
+    $results['ClamAV'] = $(if ($LASTEXITCODE -eq 0) { 'installed, signatures downloaded' } else { "installed; signature download failed (exit code $LASTEXITCODE), retry in Settings > Components" })
+  } else {
+    $results['ClamAV'] = 'not installed (see log)'
+  }
+  Write-Log "ClamAV: $($results['ClamAV'])"
 }
 
 if ($ClaudeCode) {

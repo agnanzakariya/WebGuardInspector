@@ -27,7 +27,8 @@ public sealed class ComponentRowViewModel : ObservableObject
         set
         {
             if (!SetProperty(ref _state, value)) return;
-            foreach (var n in new[] { nameof(Name), nameof(InstalledText), nameof(LatestText), nameof(SourceText), nameof(StatusText), nameof(Tone), nameof(Note), nameof(HasNote) })
+            foreach (var n in new[] { nameof(Name), nameof(InstalledText), nameof(LatestText), nameof(VersionLine), nameof(SourceText), nameof(StatusText),
+                         nameof(Tone), nameof(Note), nameof(HasNote) })
                 OnPropertyChanged(n);
             UpdateCommand.RaiseCanExecuteChanged();
         }
@@ -36,6 +37,10 @@ public sealed class ComponentRowViewModel : ObservableObject
     public string Name => State.Name;
     public string InstalledText => State.InstalledVersion is { Length: > 0 } v ? v : "—";
     public string LatestText => State.LatestVersion is { Length: > 0 } v ? v : "unknown";
+    /// <summary>"Installed x · latest y"; for a signature database its version and when it was last updated.</summary>
+    public string VersionLine => State.Source == ComponentSource.SignatureUpdater
+        ? $"{(State.InstalledVersion is { Length: > 0 } v ? v : "not downloaded")}{(State.LatestVersion is { } at ? " · last update " + at : string.Empty)}"
+        : $"Installed {InstalledText} · latest {LatestText}";
     public string Note => State.Note ?? string.Empty;
     public bool HasNote => State.Note is { Length: > 0 };
 
@@ -45,6 +50,7 @@ public sealed class ComponentRowViewModel : ObservableObject
         ComponentSource.Winget => "winget",
         ComponentSource.Pip => "pip (Python)",
         ComponentSource.ClaudeUpdater => "claude update",
+        ComponentSource.SignatureUpdater => "freshclam (Azura's database, updated daily)",
         ComponentSource.Manual => "installed manually",
         _ => "not installed",
     };
@@ -52,7 +58,9 @@ public sealed class ComponentRowViewModel : ObservableObject
     public string StatusText => State switch
     {
         { Source: ComponentSource.Missing } => "Not installed",
+        { Source: ComponentSource.SignatureUpdater, InstalledVersion: null } => "Not downloaded",
         { UpdateAvailable: true } => "Update available",
+        { Source: ComponentSource.SignatureUpdater } => "Up to date",
         { LatestVersion: null } => "Unknown",
         _ => "Up to date",
     };
@@ -149,7 +157,12 @@ public sealed class ComponentsViewModel : ObservableObject
     /// </summary>
     public async Task<bool> CheckOnStartupAsync(CancellationToken cancellationToken = default)
     {
-        var updates = await CheckAsync(cancellationToken).ConfigureAwait(true);
+        IReadOnlyList<ComponentState> updates = await CheckAsync(cancellationToken).ConfigureAwait(true);
+        // Signature databases that are already downloaded are refreshed without asking (small daily diffs);
+        // the first, large download stays a deliberate click.
+        foreach (var row in Rows.Where(r => r.State is { Source: ComponentSource.SignatureUpdater, UpdateAvailable: true, InstalledVersion: not null }).ToArray())
+            await UpdateRowAsync(row).ConfigureAwait(true);
+        updates = Rows.Where(r => r.State.UpdateAvailable).Select(r => r.State).ToArray();
         if (updates.Count == 0 || _dialogs is null) return false;
         var list = string.Join("\n", updates.Select(u => $"•  {u.Name}: {u.InstalledVersion} → {u.LatestVersion}"));
         return _dialogs.Confirm("Component updates available",
@@ -186,11 +199,9 @@ public sealed class ComponentsViewModel : ObservableObject
             await _catalog.RefreshAsync().ConfigureAwait(true);
             // Read the version again from the tool itself.
             var installed = (await FindInstalledAsync(CancellationToken.None).ConfigureAwait(true)).FirstOrDefault(c => c.Id == row.State.Id);
-            if (installed is not null)
-            {
-                var fresh = (await _updater.CheckAsync([installed], CancellationToken.None).ConfigureAwait(true)).Single();
-                row.State = fresh;
-            }
+            var fresh = (await _updater.CheckAsync(installed is null ? [] : [installed], CancellationToken.None).ConfigureAwait(true))
+                .FirstOrDefault(s => s.Id == row.State.Id);
+            if (fresh is not null) row.State = fresh;
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or HttpRequestException or UnauthorizedAccessException)
         {

@@ -11,6 +11,8 @@ public enum ComponentSource
     Pip,
     /// <summary>Claude Code's native installer: "claude update".</summary>
     ClaudeUpdater,
+    /// <summary>Signature database updated by Azura (ClamAV freshclam).</summary>
+    SignatureUpdater,
     /// <summary>Installed some other way; updated by hand.</summary>
     Manual,
     /// <summary>Not installed.</summary>
@@ -32,7 +34,8 @@ public sealed record ComponentState(
     string? Note)
 {
     /// <summary>Update can be done from the app (not for manual installs or when the latest version is unknown).</summary>
-    public bool CanUpdate => UpdateAvailable && Source is ComponentSource.Bundled or ComponentSource.Winget or ComponentSource.Pip or ComponentSource.ClaudeUpdater;
+    public bool CanUpdate => UpdateAvailable && Source is ComponentSource.Bundled or ComponentSource.Winget or ComponentSource.Pip
+        or ComponentSource.ClaudeUpdater or ComponentSource.SignatureUpdater;
 }
 
 public interface IComponentUpdater
@@ -42,4 +45,16 @@ public interface IComponentUpdater
 
     /// <summary>Updates one component the way it was installed. Returns a short result text; throws when it failed.</summary>
     Task<string> UpdateAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken);
+}
+
+/// <summary>State of a signature database (ClamAV): what is on disk and whether it is due for an update.</summary>
+public sealed record SignatureDatabaseState(bool Present, string Description, DateTimeOffset? UpdatedUtc, bool UpdaterAvailable);
+
+/// <summary>A signature database Azura keeps up to date (implemented for ClamAV in WebGuard.Detection).</summary>
+public interface ISignatureDatabase
+{
+    string Id { get; }
+    string Name { get; }
+    SignatureDatabaseState Inspect();
+    Task<string> UpdateAsync(CancellationToken cancellationToken);
 }

@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.9.0
+# Azura — WebGuard Inspector v0.10.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -90,7 +90,7 @@ Wizard bisa diulang dari **Settings → Run setup wizard**.
 
 ### Components (Settings)
 
-Kartu **Components** menampilkan versi terpasang dan versi terbaru Semgrep, Gitleaks, OSV-Scanner, YARA-X dan Claude Code
+Kartu **Components** menampilkan versi terpasang dan versi terbaru Semgrep, Gitleaks, OSV-Scanner, YARA-X, ClamAV (beserta database signature-nya) dan Claude Code
 (versi terbaru dari GitHub Releases, PyPI dan npm; hanya metadata publik yang diminta). Setiap komponen di-update sesuai
 cara pemasangannya, sehingga yang diperbarui selalu salinan yang benar-benar dipakai Azura:
 
@@ -99,6 +99,8 @@ cara pemasangannya, sehingga yang diperbarui selalu salinan yang benar-benar dip
 | Bawaan installer (`<app>\tools`) | Unduh aset rilis resmi GitHub, cocokkan SHA-256 dengan digest GitHub, ganti exe |
 | winget | `winget upgrade --id <paket>` |
 | pip (Semgrep) | `python -m pip install --upgrade semgrep` dengan Python pemilik `semgrep.exe` |
+| ClamAV | `winget upgrade --id Cisco.ClamAV` (MSI di Program Files; minta hak admin) |
+| ClamAV signatures | freshclam dengan konfigurasi Azura; diperbarui otomatis saat start bila lebih dari sehari, unduhan pertama (~110 MB) lewat tombol Update |
 | Claude Code | `claude update` |
 | Lainnya | Ditandai *installed manually*; update dengan cara Anda memasangnya |
 
@@ -138,7 +140,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 82 tests
+.\build.ps1          # restore + build + 86 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -150,7 +152,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 82 tests
+PASS: 86 tests
 PASS: build and tests completed
 ```
 
@@ -183,7 +185,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (82 tests)
+  WebGuard.Tests         Test runner tanpa dependency (86 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -201,6 +203,7 @@ Install engine yang diinginkan; aplikasi mendeteksi .exe otomatis dari PATH, Win
 | Gitleaks | `winget install Gitleaks.Gitleaks` | `gitleaks dir` (≥ 8.19) atau `detect --no-git` untuk versi lama |
 | OSV-Scanner | `winget install Google.OSVScanner` | Mengirim nama/versi package ke OSV.dev, jadi hanya aktif bila *external lookups* diizinkan |
 | YARA-X | `winget install VirusTotal.YARA-X` | Rule bawaan di `rules\yara` (web shell, loader obfuscated, downloader, obfuscation PHP) |
+| ClamAV | `winget install Cisco.ClamAV` (atau centang di Setup) | Antivirus Cisco Talos: `clamscan --file-list` atas semua file hasil inventory. Database signature dikelola Azura di `%LOCALAPPDATA%\WebGuardInspector\clamav\db` (freshclam, tanpa admin) |
 | MalwareBazaar + ThreatFox | Auth-Key gratis dari auth.abuse.ch (satu key untuk keduanya) | Hanya SHA-256 file executable/arsip/script, maks. 200 per scan |
 | CISA KEV | Tidak perlu install | Katalog publik diunduh (tanpa data proyek), cache 24 jam; menandai finding OSV-Scanner |
 
@@ -316,6 +319,13 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.10.0** — ClamAV
+- Engine `ClamAvEngine`: ClamAV memindai semua file hasil inventory (`--file-list` tanpa BOM, batas 100 MB per file); deteksi menjadi
+  finding Malware (Critical), PUA/heuristik Medium, signature tidak resmi High. Engine siap hanya bila database signature ada.
+- `ClamAvDatabase`/`ClamAvSignatureDatabase`: freshclam dengan konfigurasi Azura ke folder per-user, versi daily/main dari header CVD,
+  penanda update terakhir. Komponen *ClamAV* (winget) dan *ClamAV signatures* (diperbarui otomatis saat start bila sudah ada).
+- Setup: opsi ClamAV (winget + unduh signature). About mencantumkan lisensi ClamAV (GPL-2.0, tidak dibundel). 86 tests.
 
 **0.9.0** — Update komponen
 - `ComponentUpdateService`: versi terbaru Semgrep (PyPI), Gitleaks/OSV-Scanner/YARA-X (GitHub) dan Claude Code (npm); update sesuai

@@ -177,7 +177,7 @@ public static class PresentationTests
         await Task.Delay(50);
         Assert.True(findings.HasNoFindings, "no findings when no engine runs");
         Assert.Equal("No security engine ran", findings.EmptyTitle, "empty state explains why");
-        Assert.Equal(4, findings.EngineRuns.Count, "engine runs listed");
+        Assert.Equal(5, findings.EngineRuns.Count, "engine runs listed (Semgrep, Gitleaks, OSV-Scanner, YARA-X, ClamAV)");
         Assert.Equal(1, historyVm.Items.Count, "history updated");
 
         shell.ToggleThemeCommand.Execute(null);

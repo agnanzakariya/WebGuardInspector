@@ -120,7 +120,8 @@ public partial class App : Application
         componentHttp.DefaultRequestHeaders.UserAgent.ParseAdd($"WebGuardInspector/{AppInfo.Version}");
         var components = new ComponentsViewModel(engines, catalog,
             new ComponentUpdateService(componentHttp, processRunner, Path.Combine(AppContext.BaseDirectory, "tools"),
-                () => ExecutableLocator.Find(["winget"])),
+                () => ExecutableLocator.Find(["winget"]),
+                [new ClamAvSignatureDatabase(processRunner, () => ClamscanPath(settings.Current))]),
             fixer, dialogs);
 
         return new ShellViewModel(
@@ -139,6 +140,12 @@ public partial class App : Application
             theme,
             setup);
     }
+
+    /// <summary>clamscan.exe from Settings, else the installed one (freshclam.exe lives next to it).</summary>
+    private static string? ClamscanPath(AppSettings s) =>
+        s.EngineExecutables.TryGetValue(ClamAvEngine.Id, out var configured) && File.Exists(configured)
+            ? configured
+            : ExecutableLocator.Find(["clamscan"]);
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {

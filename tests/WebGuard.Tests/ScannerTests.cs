@@ -108,7 +108,7 @@ public static class ScannerTests
         var report = await new LocalFolderScanner(TestEngines.Offline())
             .ScanAsync(temp.Path, ScanOptions.Default, null, CancellationToken.None);
 
-        Assert.Equal(4, report.Engines.Count, "engines");
+        Assert.Equal(5, report.Engines.Count, "engines (the five CLI engines)");
         Assert.True(report.Engines.All(e => e.Outcome == "Disabled"), "all disabled");
 
         using var stream = new MemoryStream();

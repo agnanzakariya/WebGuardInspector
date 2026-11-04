@@ -43,6 +43,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [CustomMessages]
 english.DepsGroup=Install dependencies (internet connection needed):
 english.DepSemgrep=Semgrep static analysis (installs Python 3 if missing, then pip install semgrep)
+english.DepClamAV=ClamAV antivirus engine (winget, administrator rights) + signature database (~110 MB)
 english.DepClaude=Claude Code CLI - for Fixing with Claude (sign in afterwards)
 english.DepObsidian=Obsidian - for the Second Brain
 english.DepLMStudio=LM Studio - for the local AI analyst (large download)
@@ -52,6 +53,7 @@ english.RepairDeps=Install or repair dependencies
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "semgrep"; Description: "{cm:DepSemgrep}"; GroupDescription: "{cm:DepsGroup}"
+Name: "clamav"; Description: "{cm:DepClamAV}"; GroupDescription: "{cm:DepsGroup}"; Flags: unchecked
 Name: "claude"; Description: "{cm:DepClaude}"; GroupDescription: "{cm:DepsGroup}"; Flags: unchecked
 Name: "obsidian"; Description: "{cm:DepObsidian}"; GroupDescription: "{cm:DepsGroup}"; Flags: unchecked
 Name: "lmstudio"; Description: "{cm:DepLMStudio}"; GroupDescription: "{cm:DepsGroup}"; Flags: unchecked
@@ -78,6 +80,7 @@ function DepsArgs(Param: String): String;
 begin
   Result := '';
   if WizardIsTaskSelected('semgrep') then Result := Result + ' -Semgrep';
+  if WizardIsTaskSelected('clamav') then Result := Result + ' -ClamAV';
   if WizardIsTaskSelected('claude') then Result := Result + ' -ClaudeCode';
   if WizardIsTaskSelected('obsidian') then Result := Result + ' -Obsidian';
   if WizardIsTaskSelected('lmstudio') then Result := Result + ' -LMStudio';

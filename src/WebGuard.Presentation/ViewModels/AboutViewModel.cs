@@ -99,6 +99,8 @@ public sealed class AboutViewModel : ObservableObject
             License(".NET runtime", "MIT", "Bundled (self-contained app)", null, "https://github.com/dotnet/runtime/blob/main/LICENSE.TXT"),
             License("Inno Setup", "Inno Setup License", "Installer and uninstaller", null, "https://jrsoftware.org/files/is/license.txt"),
             License("Semgrep CE", "LGPL-2.1", "Installed separately (pip)", null, "https://github.com/semgrep/semgrep/blob/develop/LICENSE"),
+            License("ClamAV", "GPL-2.0", "Installed separately (winget Cisco.ClamAV); signatures from Cisco Talos", null,
+                "https://github.com/Cisco-Talos/clamav/blob/main/COPYING.txt"),
             License("Claude Code", "Anthropic terms", "Installed separately; used with your Claude account", null, "https://www.anthropic.com/legal/commercial-terms"),
         ];
         _settings.Changed += (_, _) => OnPropertyChanged(nameof(VaultLocation));
