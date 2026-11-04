@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.10.2
+# Azura — WebGuard Inspector v0.10.3
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -140,7 +140,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 88 tests
+.\build.ps1          # restore + build + 92 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -152,7 +152,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 88 tests
+PASS: 92 tests
 PASS: build and tests completed
 ```
 
@@ -185,7 +185,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (88 tests)
+  WebGuard.Tests         Test runner tanpa dependency (92 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -307,6 +307,13 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
   `nama.ext.yyyyMMdd-HHmmss.wreck`: setiap baris dikomentari sesuai bahasanya (`//`, `#`, `<!-- -->`, …; tag PHP `<?`/`?>`
   dipatahkan), dengan header berisi file asal, waktu, alasan dan lokasi backup. Ekstensi `.wreck` membuatnya tidak dieksekusi
   server, dan folder `wreck` selalu dikecualikan dari scan. Jangan ikut men-deploy folder ini. Undo menghapus salinan wreck-nya.
+- **File besar** (> 200.000 karakter): yang dikirim hanya cuplikan ±200 baris di sekitar temuan (maks. 60.000 karakter); edit tetap
+  dicocokkan dengan file utuh dan harus unik di seluruh file.
+- **Dependency di lockfile** (`composer.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `Pipfile.lock`,
+  `uv.lock`, `Gemfile.lock`, `Cargo.lock`, `go.sum`, `mix.lock`, `pubspec.lock`): lockfile tidak pernah diedit. Claude mengubah
+  constraint di manifest di sebelahnya (`composer.json`, `package.json`, …) bila perlu, dan memberi perintah untuk membuat ulang
+  lockfile (mis. `composer update <paket> --with-all-dependencies`) yang ditampilkan dengan tombol **Copy**. Azura tidak menjalankan
+  package manager sendiri, karena script instalasi paket pihak ketiga ikut berjalan.
 - Verdict `false_positive` hanya saran; **Confirm false positive** mencatat `FalsePositive`. File biner, non-UTF-8 atau
   lebih dari 1 MB tidak dikirim dan ditandai *Needs manual action*.
 
@@ -319,6 +326,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.10.3** — Fixing untuk file besar dan lockfile: cuplikan di sekitar temuan untuk file > 200.000 karakter; temuan dependency di lockfile diperbaiki lewat manifest + perintah regenerasi lockfile (ditampilkan, bisa disalin, tidak dijalankan). Diuji live dengan Claude pada `laravel/framework` 11.51.0 (`composer.lock` 464 KB). 92 tests.
 
 **0.10.2** — ClamAV cepat untuk proyek besar: clamd sementara + klien `clamdscan` paralel (49.695 file dalam ~6 menit, sebelumnya timeout 10 menit); fallback ke `clamscan` bila clamd tidak bisa start; hasil yang sudah ada dipertahankan bila waktu habis. 88 tests.
 

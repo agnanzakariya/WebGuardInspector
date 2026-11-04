@@ -97,7 +97,7 @@ public partial class App : Application
         var fixer = new ClaudeCodeFixer(processRunner,
             () => new ClaudeCodeSettings(settings.Current.ClaudeFixEnabled, settings.Current.ClaudeCliPath, settings.Current.ClaudeModel),
             () => ExecutableLocator.Find(["claude"]));
-        var fixing = new FixingViewModel(findings, fixer, new FixApplier(FixApplier.DefaultBackupRoot), secondBrain, settings);
+        var fixing = new FixingViewModel(findings, fixer, new FixApplier(FixApplier.DefaultBackupRoot), secondBrain, settings, clipboard);
         var setup = new SetupWizardViewModel(settings, theme, catalog, analyst, fixer, secondBrain, folderPicker);
 
         // Large installer downloads: no client-wide timeout; the update check has its own.

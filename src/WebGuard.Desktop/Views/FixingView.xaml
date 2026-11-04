@@ -186,6 +186,25 @@
               </Border>
               <TextBlock Text="CLAUDE'S EXPLANATION" Style="{StaticResource Text.Label}" Margin="0,12,0,4"/>
               <TextBlock Text="{Binding Explanation}" Style="{StaticResource Text.Wrap}"/>
+              <TextBlock Text="{Binding EditPathText}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                         Visibility="{Binding EditsOtherFile, Converter={StaticResource BoolToVisibility}}"/>
+              <StackPanel Visibility="{Binding HasFollowUpCommand, Converter={StaticResource BoolToVisibility}}" Margin="0,12,0,0">
+                <TextBlock Text="COMMAND TO RUN IN THE PROJECT FOLDER" Style="{StaticResource Text.Label}" Margin="0,0,0,4"/>
+                <Border Style="{StaticResource Inset}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Text="{Binding FollowUpCommand, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0"
+                             FontFamily="{StaticResource Font.Code}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Style="{StaticResource Button.Secondary}" Content="Copy" Padding="10,3" Margin="8,0,0,0"
+                            Command="{Binding DataContext.CopyFollowUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                  </Grid>
+                </Border>
+                <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="Azura does not run package managers: install scripts of a third-party package would run with them. Review the command, run it yourself, then scan again."/>
+              </StackPanel>
               <TextBlock Text="{Binding Footer}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"/>
             </StackPanel>
 
