@@ -2,7 +2,10 @@ namespace WebGuard.Core;
 
 public static class AppInfo
 {
-    public const string Name = "WebGuard Inspector";
+    /// <summary>Brand shown first (sidebar title); the product name is shown under it.</summary>
+    public const string Brand = "Azura";
+    public const string Product = "WebGuard Inspector";
+    public const string Name = Brand + " — " + Product;
     public const string Version = "0.6.1";
     public const string Tagline = "Local Source Security Workspace";
 }

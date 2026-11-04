@@ -1,4 +1,7 @@
-# WebGuard Inspector v0.6.1 — Local Source Security Workspace
+# Azura — WebGuard Inspector v0.6.1
+
+*Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
+ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
 
 Aplikasi desktop Windows (WPF, .NET 10) untuk inspeksi keamanan source code secara lokal.
 Setelah inventory + SHA-256, aplikasi menjalankan engine deteksi (Semgrep, Gitleaks, OSV-Scanner, YARA-X) dan lookup
@@ -238,7 +241,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 
 ## Changelog
 
-**0.6.1** — Rule PHP
+**0.6.1** — Rule PHP, nama dan ikon Azura
+- Aplikasi bernama **Azura** (sub: WebGuard Inspector) dengan logo ksatria; ikon dipakai untuk exe, jendela, taskbar dan `WebGuard.Mcp.exe`.
 - 13 rule Semgrep PHP (taint dari input request: SQLi, command/code injection, file inclusion, path traversal, unserialize, XSS;
   serta kredensial hardcoded, hash password lemah, TLS off, `preg_replace` /e, remote code load, `extract`).
 - 7 rule YARA-X untuk obfuscation/backdoor PHP dan admin WordPress tersembunyi.

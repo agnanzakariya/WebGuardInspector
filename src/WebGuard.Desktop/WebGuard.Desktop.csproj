@@ -5,10 +5,16 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>WebGuard.Desktop</RootNamespace>
     <AssemblyName>WebGuard.Desktop</AssemblyName>
-    <AssemblyTitle>WebGuard Inspector</AssemblyTitle>
+    <AssemblyTitle>Azura — WebGuard Inspector</AssemblyTitle>
+    <Product>Azura — WebGuard Inspector</Product>
+    <ApplicationIcon>Assets\azura.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\azura.ico" />
+    <Resource Include="Assets\azura-128.png" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WebGuard.Core\WebGuard.Core.csproj" />
     <ProjectReference Include="..\WebGuard.Scanner\WebGuard.Scanner.csproj" />

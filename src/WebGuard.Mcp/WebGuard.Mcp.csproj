@@ -7,6 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RootNamespace>WebGuard.Mcp</RootNamespace>
     <AssemblyName>WebGuard.Mcp</AssemblyName>
+    <ApplicationIcon>..\WebGuard.Desktop\Assets\azura.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WebGuard.Core\WebGuard.Core.csproj" />

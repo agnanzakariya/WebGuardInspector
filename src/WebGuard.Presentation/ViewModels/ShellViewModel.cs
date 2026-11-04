@@ -100,6 +100,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     }
 
     public string AppName => AppInfo.Name;
+    public string AppBrand => AppInfo.Brand;
+    public string AppProduct => AppInfo.Product;
     public string AppTagline => AppInfo.Tagline;
     public string VersionText => "v" + AppInfo.Version;
     public ScanWorkspaceViewModel Workspace { get; }

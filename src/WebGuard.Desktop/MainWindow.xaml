@@ -6,7 +6,7 @@
         xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:ShellViewModel}"
-        Title="WebGuard Inspector" Width="1480" Height="920" MinWidth="1240" MinHeight="760"
+        Title="Azura — WebGuard Inspector" Icon="Assets/azura.ico" Width="1480" Height="920" MinWidth="1240" MinHeight="760"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Brush.Background}"
         FontFamily="{StaticResource Font.UI}"
@@ -38,14 +38,11 @@
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <StackPanel Orientation="Horizontal" Margin="6,0,0,22">
-          <Grid Width="34" Height="38">
-            <TextBlock Text="&#xEA18;" FontFamily="{StaticResource Font.Icons}" FontSize="34" Foreground="{DynamicResource Brush.Primary}"/>
-            <TextBlock Text="&#xE73E;" FontFamily="{StaticResource Font.Icons}" FontSize="13" Foreground="{DynamicResource Brush.OnPrimary}"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,2"/>
-          </Grid>
+          <Image Source="Assets/azura-128.png" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality"
+                 AutomationProperties.Name="Azura logo"/>
           <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-            <TextBlock Text="WebGuard" Style="{StaticResource Text.Section}" FontSize="16"/>
-            <TextBlock Text="Inspector" Style="{StaticResource Text.Caption}"/>
+            <TextBlock Text="{Binding AppBrand}" Style="{StaticResource Text.Section}" FontSize="18"/>
+            <TextBlock Text="{Binding AppProduct}" Style="{StaticResource Text.Caption}"/>
           </StackPanel>
         </StackPanel>
 
