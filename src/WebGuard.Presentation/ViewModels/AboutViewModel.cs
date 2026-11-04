@@ -47,7 +47,7 @@ public sealed class AboutViewModel : ObservableObject
     private readonly IDialogService? _dialogs;
     private readonly IInstallerLauncher? _installer;
     private readonly TimeProvider _time;
-    private string _updateStatus = "Not checked yet.";
+    private string _updateStatus;
     private StatusTone _updateTone;
     private ReleaseInfo? _latest;
     private bool _isUpdateAvailable;
@@ -70,6 +70,10 @@ public sealed class AboutViewModel : ObservableObject
         _time = timeProvider ?? TimeProvider.System;
         EngineCatalog = engines;
         Paths = paths;
+        // The start-up check runs at most once a day, so a recent check is only reported, not repeated.
+        _updateStatus = settings.Current.LastUpdateCheckUtc is null
+            ? "Not checked yet."
+            : "Checked recently (see below). Press Check now to look again.";
 
         CheckNowCommand = new AsyncRelayCommand(() => CheckAsync(), () => _updates is not null && !IsBusy, ex => SetStatus("Update check failed: " + ex.Message, StatusTone.Danger));
         InstallUpdateCommand = new AsyncRelayCommand(InstallAsync, () => CanInstall && !IsBusy, ex => SetStatus(ex.Message, StatusTone.Danger));
