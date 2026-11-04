@@ -9,6 +9,9 @@ public sealed record ScanOptions
         ".next", ".venv", "venv", "__pycache__", "packages", "TestResults",
     ];
 
+    /// <summary>Holds commented-out copies of fixed files (see Fixing.WreckCopy). Always excluded, whatever the settings say.</summary>
+    public const string WreckFolder = "wreck";
+
     public const long DefaultMaxHashBytes = 100L * 1024 * 1024;
     public static readonly TimeSpan DefaultEngineTimeout = TimeSpan.FromMinutes(10);
 
@@ -34,6 +37,7 @@ public sealed record ScanOptions
         ExcludedDirectories = ExcludedDirectories
             .Select(d => d.Trim().Trim('\\', '/'))
             .Where(d => d.Length > 0)
+            .Append(WreckFolder)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray(),
         MaxHashBytes = Math.Max(1, MaxHashBytes),

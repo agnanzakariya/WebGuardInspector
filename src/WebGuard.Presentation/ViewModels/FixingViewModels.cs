@@ -379,13 +379,17 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
     private async Task ApplySelectedAsync()
     {
         if (SelectedItem is not { Proposal: { } proposal } item || _findings.Report is not { } report) return;
-        var (fix, patch) = _applier.Apply(new ProjectScope(report.RootFolder), item.Finding.Location.RelativePath, proposal.Edits);
+        var finding = item.Finding;
+        var (fix, patch) = _applier.Apply(new ProjectScope(report.RootFolder), finding.Location.RelativePath, proposal.Edits,
+            $"{finding.Title} ({finding.EngineId} {finding.RuleId}, {finding.Severity})");
         item.Applied = fix;
         item.Patch = patch;
         item.State = FixState.Applied;
-        item.Message = "Applied. Original saved to " + fix.BackupPath + ". Scan again to confirm the finding is gone.";
+        var wreck = fix.WreckPath is null ? string.Empty : Path.GetRelativePath(report.RootFolder, fix.WreckPath);
+        item.Message = $"Applied. The vulnerable version is commented out in {wreck} (not scanned; do not deploy the wreck folder). " +
+                       "Scan again to confirm the finding is gone.";
         await _findings.SetStatusAsync(item.Finding, ValidationStatus.Fixed,
-            $"Fix proposed by {proposal.Model} and applied after review. Backup: {fix.BackupPath}").ConfigureAwait(true);
+            $"Fix proposed by {proposal.Model} and applied after review. Old version: {wreck}. Backup: {fix.BackupPath}").ConfigureAwait(true);
         RaiseCommands();
     }
 
@@ -395,7 +399,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         FixApplier.Undo(fix);
         item.Applied = null;
         item.State = FixState.Proposed;
-        item.Message = "Undone; the original file is back. The proposal can be applied again.";
+        item.Message = "Undone; the original file is back and its wreck copy was removed. The proposal can be applied again.";
         await _findings.SetStatusAsync(item.Finding, ValidationStatus.NeedsReview, "AI fix undone.").ConfigureAwait(true);
         RaiseCommands();
     }

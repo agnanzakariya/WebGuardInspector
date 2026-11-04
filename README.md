@@ -226,8 +226,12 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
   perintah, atau mengubah file. Jawabannya JSON (dicek dengan `--json-schema`) berisi edit teks yang persis.
 - Edit diterapkan semua atau tidak sama sekali; setiap `old_text` harus cocok tepat satu kali. `[REDACTED]` dicocokkan
   sebagai wildcard dan nilai aslinya dikembalikan, jadi teks `[REDACTED]` tidak pernah tertulis ke kode.
-- **Apply** menyalin file asli ke `%LOCALAPPDATA%\WebGuardInspector\fix-backups` (di luar proyek), menjaga BOM dan CRLF, lalu
-  mencatat status `Fixed` di Second Brain. **Undo** mengembalikan file asli (ditolak bila file sudah berubah lagi).
+- **Apply** menyalin file asli byte-per-byte ke `%LOCALAPPDATA%\WebGuardInspector\fix-backups` (untuk Undo), menjaga BOM dan
+  CRLF, lalu mencatat status `Fixed` di Second Brain. **Undo** mengembalikan file asli (ditolak bila file sudah berubah lagi).
+- Versi lama yang rentan juga disimpan di **`<proyek>\wreck\`** (sub-folder asli dipertahankan) sebagai
+  `nama.ext.yyyyMMdd-HHmmss.wreck`: setiap baris dikomentari sesuai bahasanya (`//`, `#`, `<!-- -->`, …; tag PHP `<?`/`?>`
+  dipatahkan), dengan header berisi file asal, waktu, alasan dan lokasi backup. Ekstensi `.wreck` membuatnya tidak dieksekusi
+  server, dan folder `wreck` selalu dikecualikan dari scan. Jangan ikut men-deploy folder ini. Undo menghapus salinan wreck-nya.
 - Verdict `false_positive` hanya saran; **Confirm false positive** mencatat `FalsePositive`. File biner, non-UTF-8 atau
   lebih dari 1 MB tidak dikirim dan ditandai *Needs manual action*.
 
@@ -247,6 +251,7 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
   serta kredensial hardcoded, hash password lemah, TLS off, `preg_replace` /e, remote code load, `extract`).
 - 7 rule YARA-X untuk obfuscation/backdoor PHP dan admin WordPress tersembunyi.
 - Evidence Semgrep kini diredaksi; redactor juga menangkap `define('KEY', '…')` dan `'password' => '…'`. 70 tests.
+- Fixing: versi lama file yang diperbaiki disimpan sebagai salinan berkomentar `*.wreck` di folder `wreck` proyek (tidak di-scan).
 - Catatan Second Brain ditulis langsung (tanpa file sementara + rename): Obsidian melewatkan event rename saat scan menulis
   banyak catatan sekaligus, sehingga sebagian catatan "not found" sampai Obsidian di-reload.
 

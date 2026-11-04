@@ -83,7 +83,7 @@ public static class FixingTests
         var scope = new ProjectScope(project.Path);
         var applier = new FixApplier(backups.Path, new FixedTimeProvider(Now));
 
-        var (fix, patch) = applier.Apply(scope, "src/a.php", [new CodeEdit("run_remote($_REQUEST['x']);\n", "")]);
+        var (fix, patch) = applier.Apply(scope, "src/a.php", [new CodeEdit("run_remote($_REQUEST['x']);\n", "")], "bad call");
         Assert.True(patch.Succeeded, "patched");
         var written = File.ReadAllBytes(path);
         Assert.True(written.Take(3).SequenceEqual(Encoding.UTF8.GetPreamble()), "BOM kept");
@@ -92,14 +92,41 @@ public static class FixingTests
         Assert.True(fix.BackupPath.StartsWith(backups.Path, StringComparison.OrdinalIgnoreCase), "backup is outside the project");
         Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(fix.BackupPath)!)!)!, "manifest.json")), "manifest written");
 
+        // The vulnerable version is kept, commented out and renamed, under <project>\wreck with the same sub-folders.
+        var wreck = fix.WreckPath!;
+        Assert.True(Path.GetDirectoryName(wreck)!.Equals(Path.Combine(project.Path, "wreck", "src"), StringComparison.OrdinalIgnoreCase), "wreck folder mirrors src/");
+        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(wreck), @"^a\.php\.\d{8}-\d{6}\.wreck$"), "renamed: " + Path.GetFileName(wreck));
+        var wreckText = File.ReadAllText(wreck);
+        Assert.True(wreckText.StartsWith("// WEBGUARD WRECK", StringComparison.Ordinal), "header comment");
+        Assert.True(wreckText.Contains("// Reason:        bad call", StringComparison.Ordinal), "reason in header");
+        Assert.True(wreckText.Contains("// < ?php\r\n// run_remote($_REQUEST['x']);\r\n", StringComparison.Ordinal), "every line commented, PHP tag defused, CRLF kept");
+        Assert.True(wreckText.Split("\r\n").Where(l => l.Length > 0).All(l => l.StartsWith("// ", StringComparison.Ordinal)), "no live line");
+
         FixApplier.Undo(fix);
         Assert.True(File.ReadAllBytes(path).SequenceEqual(original), "undo restores the original bytes");
+        Assert.True(!File.Exists(wreck), "undo removes the wreck copy");
 
         var (again, _) = applier.Apply(scope, "src/a.php", [new CodeEdit("run_remote($_REQUEST['x']);\n", "")]);
         File.AppendAllText(path, "// edited later\r\n");
         Assert.True(Throws<InvalidOperationException>(() => FixApplier.Undo(again)), "undo refused after a later change");
         Assert.True(Throws<InvalidOperationException>(() => applier.Apply(scope, "src/a.php", [new CodeEdit("run_remote(", "x(")])), "stale edit refused");
         Assert.True(Throws<InvalidOperationException>(() => applier.Apply(scope, "../outside.php", [new CodeEdit("a", "b")])), "path outside the project refused");
+    }
+
+    [Test]
+    public static void Wreck_copies_use_the_language_comment_style_and_are_never_scanned()
+    {
+        Assert.Equal("# x = 1", WreckCopy.Comment("x = 1", ".py"), "python");
+        Assert.Equal("<!-- <b>a- -b</b> -->", WreckCopy.Comment("<b>a--b</b>", ".html"), "html keeps the comment closed");
+        Assert.Equal("/* a{} * / */", WreckCopy.Comment("a{} */", ".css"), "css keeps the comment closed");
+        Assert.Equal("-- select 1", WreckCopy.Comment("select 1", ".sql"), "sql");
+        Assert.Equal("REM del x", WreckCopy.Comment("del x", ".bat"), "batch");
+        Assert.Equal("// a()", WreckCopy.Comment("a()", ".js"), "javascript");
+        Assert.True(WreckCopy.Render(".env", "KEY=1", ["h"]).Split('\n')[0] == "# h", "dot-files get a style too");
+        Assert.True(WreckCopy.Render("a.py", "x = 1\n", ["h"]).EndsWith("# x = 1\n", StringComparison.Ordinal), "no empty comment line for the final newline");
+
+        var options = new ScanOptions { ExcludedDirectories = ["node_modules"] }.Normalize();
+        Assert.True(options.ExcludedDirectories.Contains(ScanOptions.WreckFolder, StringComparer.OrdinalIgnoreCase), "wreck excluded even when settings omit it");
     }
 
     [Test]

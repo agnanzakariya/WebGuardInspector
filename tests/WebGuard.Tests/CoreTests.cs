@@ -31,7 +31,7 @@ public static class CoreTests
     public static void Scan_options_normalize_trims_dedupes_and_disables_link_following()
     {
         var o = new ScanOptions { ExcludedDirectories = [" bin ", "BIN", "/obj/", ""], MaxHashBytes = -5, MaxDegreeOfParallelism = 99, FollowReparsePoints = true }.Normalize();
-        Assert.Equal("bin|obj", string.Join('|', o.ExcludedDirectories), "exclusions");
+        Assert.Equal("bin|obj|wreck", string.Join('|', o.ExcludedDirectories), "exclusions (wreck is always added)");
         Assert.Equal(1L, o.MaxHashBytes, "min hash bytes");
         Assert.Equal(16, o.MaxDegreeOfParallelism, "max parallelism");
         Assert.Equal(false, o.FollowReparsePoints, "links never followed");
