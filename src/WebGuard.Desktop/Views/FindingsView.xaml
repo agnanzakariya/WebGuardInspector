@@ -243,6 +243,9 @@
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Style="{StaticResource Button.Secondary}" Content="Cancel" Command="{Binding CancelAnalysisCommand}" Padding="10,5" Margin="0,0,8,0"
                         Visibility="{Binding IsAnalyzing, Converter={StaticResource BoolToVisibility}}"/>
+                <Button Style="{StaticResource Button.Secondary}" Content="Ask AI again" Command="{Binding ReanalyzeCommand}" Padding="10,5" Margin="0,0,8,0"
+                        Visibility="{Binding CurrentAnalysis.FromSecondBrain, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
+                        ToolTip="This analysis came from the Second Brain. Ask the local model for a fresh one."/>
                 <Button Style="{StaticResource Button.Primary}" Command="{Binding AnalyzeCommand}" Padding="12,5"
                         ToolTip="Explain this finding with the local model. Secrets are redacted; nothing is changed.">
                   <StackPanel Orientation="Horizontal">

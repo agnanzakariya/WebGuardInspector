@@ -28,6 +28,7 @@ public sealed class FixItemViewModel(SecurityFinding finding) : ObservableObject
     private AppliedFix? _applied;
     private string _message = string.Empty;
     private string? _editPath;
+    private bool _fromSecondBrain;
 
     public SecurityFinding Finding
     {
@@ -104,6 +105,9 @@ public sealed class FixItemViewModel(SecurityFinding finding) : ObservableObject
     }
 
     public bool HasProposal => Proposal is not null;
+
+    /// <summary>The proposal is a fix applied before to the same rule, reused from the Second Brain without asking the AI.</summary>
+    public bool FromSecondBrain { get => _fromSecondBrain; set => SetProperty(ref _fromSecondBrain, value); }
 
     /// <summary>Command for the person to run (e.g. regenerate a lockfile). Shown with a Copy button; Azura never runs it.</summary>
     public string FollowUpCommand => Proposal?.FollowUpCommand ?? string.Empty;
@@ -196,6 +200,10 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         _settings = settings;
         FixSelectedCommand = new AsyncRelayCommand(FixSelectedAsync, () => CanAsk && SelectedItem is { IsWorking: false },
             ex => Message = "Fixing failed: " + ex.Message);
+        AskAiCommand = new AsyncRelayCommand(
+            async () => { if (SelectedItem is { } item) await RunAsync([item], askModel: true).ConfigureAwait(true); },
+            () => CanAsk && SelectedItem is { FromSecondBrain: true, IsWorking: false } && SelectedItem.State != FixState.Applied,
+            ex => Message = "Fixing failed: " + ex.Message);
         FixAllCommand = new AsyncRelayCommand(FixAllAsync, () => CanAsk && Items.Any(IsOpen), ex => Message = "Fixing failed: " + ex.Message);
         CancelCommand = new RelayCommand(() => _cts?.Cancel(), () => IsWorking);
         ApplyCommand = new AsyncRelayCommand(ApplySelectedAsync, () => !IsWorking && SelectedItem?.CanApply == true, ex => Message = "Apply failed: " + ex.Message);
@@ -234,6 +242,9 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
 
     public AsyncRelayCommand FixSelectedCommand { get; }
     public AsyncRelayCommand FixAllCommand { get; }
+
+    /// <summary>Asks the AI although a remembered fix was found in the Second Brain.</summary>
+    public AsyncRelayCommand AskAiCommand { get; }
     public ICommand CancelCommand { get; }
     public AsyncRelayCommand ApplyCommand { get; }
     public AsyncRelayCommand UndoCommand { get; }
@@ -319,7 +330,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
 
     internal async Task FixAllAsync() => await RunAsync(Items.Where(IsOpen).ToArray()).ConfigureAwait(true);
 
-    private async Task RunAsync(FixItemViewModel[] batch)
+    private async Task RunAsync(FixItemViewModel[] batch, bool askModel = false)
     {
         if (_fixer is null || _findings.Report is not { } report || batch.Length == 0 || IsWorking) return;
         using var cts = new CancellationTokenSource();
@@ -336,13 +347,14 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
                 ProgressText = batch.Length == 1
                     ? $"Asking {_fixer?.ShortName ?? "the AI"}… this can take from 20 seconds to a few minutes."
                     : string.Create(CultureInfo.InvariantCulture, $"Asking {_fixer?.ShortName ?? "the AI"} about finding {done + 1} of {batch.Length}…");
-                await ProposeAsync(scope, item, cts.Token).ConfigureAwait(true);
+                await ProposeAsync(scope, item, cts.Token, askModel).ConfigureAwait(true);
                 done++;
             }
             var counts = batch.GroupBy(i => i.State).ToDictionary(g => g.Key, g => g.Count());
             int Count(FixState s) => counts.TryGetValue(s, out var c) ? c : 0;
+            var remembered = batch.Count(i => i.FromSecondBrain);
             Message = string.Create(CultureInfo.InvariantCulture,
-                $"{Count(FixState.Proposed)} fix(es) to review, {Count(FixState.FalsePositive)} likely false positive(s), " +
+                $"{Count(FixState.Proposed)} fix(es) to review{(remembered > 0 ? $" ({remembered} reused from the Second Brain)" : string.Empty)}, {Count(FixState.FalsePositive)} likely false positive(s), " +
                 $"{Count(FixState.CannotFix)} need manual action, {Count(FixState.Failed)} failed.");
         }
         catch (OperationCanceledException)
@@ -358,11 +370,12 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         }
     }
 
-    private async Task ProposeAsync(ProjectScope scope, FixItemViewModel item, CancellationToken cancellationToken)
+    private async Task ProposeAsync(ProjectScope scope, FixItemViewModel item, CancellationToken cancellationToken, bool askModel = false)
     {
         var finding = item.Finding;
         item.Proposal = null;
         item.Patch = null;
+        item.FromSecondBrain = false;
         if (!FixRequestBuilder.TryBuild(scope, finding, _findings.AllFindings, out var request, out var error, _fixer?.Limits))
         {
             item.State = FixState.CannotFix;
@@ -373,6 +386,15 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         item.EditPath = request.EditPath;
         item.State = FixState.Working;
         item.Message = string.Empty;
+
+        // Second Brain first: a fix applied before for the same rule that fits this file is reused without asking the AI.
+        var memory = await KnowledgeLookup.MemoryAsync(_secondBrain, _settings, cancellationToken).ConfigureAwait(true);
+        if (memory is not null)
+        {
+            if (!askModel && await TryRememberedFixAsync(memory, scope, item, request, cancellationToken).ConfigureAwait(true)) return;
+            request = request with { PriorKnowledge = await KnowledgeLookup.PriorKnowledgeAsync(_secondBrain!, finding, cancellationToken).ConfigureAwait(true) };
+        }
+
         FixProposal proposal;
         try
         {
@@ -421,6 +443,51 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         await RememberAsync(finding, proposal, item.Patch, request.EditPath).ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// Tries the fixes a person applied before for this rule (newest first). The first whose edits all match this file
+    /// near the reported lines is shown as the proposal; it is still only written when the person clicks Apply.
+    /// </summary>
+    private static async Task<bool> TryRememberedFixAsync(IKnowledgeMemory memory, ProjectScope scope, FixItemViewModel item, FixRequest request,
+        CancellationToken cancellationToken)
+    {
+        var finding = item.Finding;
+        IReadOnlyList<RememberedFix> fixes;
+        try
+        {
+            fixes = await memory.GetRememberedFixesAsync(finding.EngineId, finding.RuleId, cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return false;
+        }
+        if (fixes.Count == 0 || !SourceFile.TryRead(scope, request.EditPath, out var file, out _)) return false;
+        foreach (var fix in fixes.Take(50))
+        {
+            var patch = FixPatcher.Apply(file.Text, fix.Edits);
+            if (!patch.Succeeded || !NearFinding(patch, finding)) continue;
+            var where = fix.Project is null ? fix.RelativePath : $"{fix.RelativePath} in {fix.Project}";
+            item.Proposal = new FixProposal(finding.Id, "Second Brain (fix by " + fix.Model + ")", FixVerdict.Fix,
+                $"The same change you applied to {where} on {DisplayFormat.DateTime(fix.AppliedAtUtc)}: {fix.Explanation}",
+                fix.Edits, Confidence.Medium, DateTimeOffset.UtcNow, fix.FollowUpCommand);
+            item.Patch = patch;
+            item.FromSecondBrain = true;
+            item.State = FixState.Proposed;
+            item.Message = "Reused a fix you applied before for the same rule; the AI was not asked. Review the change below, then Apply, " +
+                           "or use Ask AI instead for a new proposal.";
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>The change touches the reported lines (±20); findings without a line accept any place in the file.</summary>
+    private static bool NearFinding(PatchResult patch, SecurityFinding finding)
+    {
+        var start = finding.Location.StartLine;
+        if (start <= 0) return true;
+        var end = Math.Max(start, finding.Location.EndLine);
+        return patch.Hunks.Any(h => h.OldStart <= end + 20 && h.OldStart + h.Lines.Count >= start - 20);
+    }
+
     private async Task ApplySelectedAsync()
     {
         if (SelectedItem is not { Proposal: { } proposal } item || _findings.Report is not { } report) return;
@@ -435,6 +502,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
                        (proposal.FollowUpCommand is not null
                            ? "Now run the command below to regenerate the lockfile, then scan again."
                            : "Scan again to confirm the finding is gone.");
+        await RememberAppliedFixAsync(finding, proposal, report).ConfigureAwait(true);
         await _findings.SetStatusAsync(item.Finding, ValidationStatus.Fixed,
             $"Fix proposed by {proposal.Model} and applied after review. Old version: {wreck}. Backup: {fix.BackupPath}").ConfigureAwait(true);
         RaiseCommands();
@@ -458,6 +526,21 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
             $"Confirmed after {proposal.Model} judged it a false positive: {proposal.Explanation}").ConfigureAwait(true);
         item.Message = ok ? "Recorded as FalsePositive in the Second Brain; later scans keep this verdict." : _findings.ValidationMessage;
         RaiseCommands();
+    }
+
+    /// <summary>Keeps an applied fix so the same change can be offered for this rule elsewhere without asking the AI.</summary>
+    private async Task RememberAppliedFixAsync(SecurityFinding finding, FixProposal proposal, ScanReport report)
+    {
+        if (_secondBrain is not IKnowledgeMemory memory || _settings?.Current.SecondBrainAutoRecord != true) return;
+        try
+        {
+            if ((await _secondBrain.GetStatusAsync(CancellationToken.None).ConfigureAwait(true)).Availability != EngineAvailability.Ready) return;
+            await memory.RememberFixAsync(finding, proposal, Path.GetFileName(report.RootFolder.TrimEnd('\\', '/')), CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // The fix is applied; only the memory was not updated.
+        }
     }
 
     /// <summary>Stores the proposal in the finding's note as an unverified AI analysis (diff redacted).</summary>
@@ -490,6 +573,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
     {
         FixSelectedCommand.RaiseCanExecuteChanged();
         FixAllCommand.RaiseCanExecuteChanged();
+        AskAiCommand.RaiseCanExecuteChanged();
         (CancelCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
         ApplyCommand.RaiseCanExecuteChanged();
         UndoCommand.RaiseCanExecuteChanged();

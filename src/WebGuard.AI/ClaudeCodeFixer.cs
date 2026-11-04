@@ -175,6 +175,11 @@ public sealed class ClaudeCodeFixer(IExternalProcessRunner runner, Func<ClaudeCo
             sb.AppendLine(CultureInfo.InvariantCulture, $"- Manifest to edit if needed: {d.ManifestPath}{(request.RedactedFileContent.Length == 0 ? " (not found or too large; give only the command)" : string.Empty)}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"- Suggested command to regenerate the lockfile: {d.Command}");
         }
+        if (!string.IsNullOrWhiteSpace(request.PriorKnowledge))
+        {
+            sb.AppendLine();
+            sb.Append(request.PriorKnowledge.TrimEnd()).AppendLine();
+        }
         sb.AppendLine();
         if (request.Excerpt is { } x)
         {

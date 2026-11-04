@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
 using WebGuard.Core;
 using WebGuard.Core.Detection;
@@ -18,15 +19,27 @@ public sealed class LocalFolderScanner : ILocalScanner
     private readonly ISecurityEngine[] _engines;
     private readonly IFindingEnricher[] _enrichers;
     private readonly TimeProvider _time;
+    private readonly IScanResultCacheStore? _cache;
+
+    /// <summary>Above this share of changed files a full scan is cheaper than copying the changed ones.</summary>
+    private const double MaxChangedShareForCopy = 0.5;
+
+    /// <summary>Changed files larger than this in total are not copied; the engine scans the real folder instead.</summary>
+    private const long MaxCopyBytes = 1024L * 1024 * 1024;
+
+    /// <summary>Folder-level configuration files the engines read; copied next to the changed files so results match.</summary>
+    private static readonly string[] EngineConfigFiles = [".semgrepignore", ".gitleaks.toml", ".gitleaksignore"];
 
     public LocalFolderScanner(
         IEnumerable<ISecurityEngine>? engines = null,
         IEnumerable<IFindingEnricher>? enrichers = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IScanResultCacheStore? resultCache = null)
     {
         _engines = engines?.ToArray() ?? [];
         _enrichers = enrichers?.ToArray() ?? [];
         _time = timeProvider ?? TimeProvider.System;
+        _cache = resultCache;
     }
 
     public async Task<ScanReport> ScanAsync(
@@ -107,6 +120,8 @@ public sealed class LocalFolderScanner : ILocalScanner
     /// Runs every Ready engine in sequence against the inventoried folder. An engine failure is recorded in its summary
     /// and never aborts the scan; only cancellation does. Findings outside the inventory (excluded folders, paths that
     /// escape the root) are dropped, and duplicates are merged by fingerprint.
+    /// With <see cref="ScanOptions.ReuseUnchangedResults"/>, an incremental engine whose version, rules and signatures are
+    /// unchanged only scans the files that changed since the previous scan; the findings of the other files are reused.
     /// </summary>
     private async Task<(IReadOnlyList<EngineRunSummary> Engines, IReadOnlyList<SecurityFinding> Findings)> RunEnginesAsync(
         Guid scanId,
@@ -120,8 +135,22 @@ public sealed class LocalFolderScanner : ILocalScanner
         var findings = new List<SecurityFinding>();
         if (_engines.Length == 0) return (summaries, findings);
 
-        var inventory = new HashSet<string>(files.Where(f => f.Status != FileScanStatus.Error).Select(f => NormalizePath(f.RelativePath)),
-            StringComparer.OrdinalIgnoreCase);
+        var readable = files.Where(f => f.Status != FileScanStatus.Error).ToArray();
+        var inventory = new HashSet<string>(readable.Select(f => NormalizePath(f.RelativePath)), StringComparer.OrdinalIgnoreCase);
+        var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in readable) identities[NormalizePath(f.RelativePath)] = Identity(f);
+
+        var previous = _cache is not null && options.ReuseUnchangedResults
+            ? await _cache.LoadAsync(root, cancellationToken).ConfigureAwait(false)
+            : null;
+        var changed = previous is null
+            ? null
+            : readable.Where(f => !previous.Files.TryGetValue(NormalizePath(f.RelativePath), out var id) || id != identities[NormalizePath(f.RelativePath)]).ToArray();
+        var changedPaths = changed?.Select(f => NormalizePath(f.RelativePath)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var cacheEntries = new Dictionary<string, EngineResultCache>(StringComparer.Ordinal);
+        string? copy = null;
+        var copyTried = false;
+
         var workRoot = Path.Combine(Path.GetTempPath(), "WebGuardInspector", scanId.ToString("N"));
         Directory.CreateDirectory(workRoot);
         try
@@ -143,27 +172,76 @@ public sealed class LocalFolderScanner : ILocalScanner
 
                 var workDir = Path.Combine(workRoot, engine.Info.Id);
                 Directory.CreateDirectory(workDir);
+                var request = new EngineScanRequest(scanId, root, files, workDir, options.EngineTimeout);
+                var incremental = engine as IIncrementalSecurityEngine;
+                var stamp = incremental is { IncrementalMode: not IncrementalScanMode.None } ? incremental.ConfigurationStamp(status) : null;
+
+                // Decide what this engine has to scan: everything, only the changed files, or nothing at all.
+                IReadOnlyList<SecurityFinding> reused = [];
+                var partial = false;
+                if (stamp is not null && changed is not null && changedPaths is not null &&
+                    previous!.Engines.TryGetValue(engine.Info.Id, out var cached) && cached.Stamp == stamp)
+                {
+                    var candidates = cached.Findings
+                        .Where(f => inventory.Contains(NormalizePath(f.Location.RelativePath)) && !changedPaths.Contains(NormalizePath(f.Location.RelativePath)))
+                        .Select(f => f with { Id = Guid.NewGuid() })
+                        .ToArray();
+                    if (changed.Length == 0)
+                    {
+                        (reused, partial, request) = (candidates, true, request with { Files = [] });
+                    }
+                    else if (incremental!.IncrementalMode == IncrementalScanMode.ChangedFilesList)
+                    {
+                        (reused, partial, request) = (candidates, true, request with { Files = changed });
+                    }
+                    else if (changed.Length <= MaxChangedShareForCopy * readable.Length)
+                    {
+                        if (!copyTried)
+                        {
+                            copyTried = true;
+                            copy = await CopyChangedFilesAsync(root, Path.Combine(workRoot, "changed-files"), changed, cancellationToken).ConfigureAwait(false);
+                        }
+                        if (copy is not null) (reused, partial, request) = (candidates, true, request with { RootFolder = copy, Files = changed });
+                    }
+                }
+
                 var engineProgress = progress is null ? null : new EngineProgressAdapter(p =>
                     progress.Report(new ScanProgress(ScanPhase.Analyzing, index, _engines.Length, 0, 0, p.Message)));
                 EngineScanResult result;
-                try
+                if (partial && request.Files.Count == 0)
                 {
-                    result = await engine.ScanAsync(new EngineScanRequest(scanId, root, files, workDir, options.EngineTimeout),
-                        engineProgress, cancellationToken).ConfigureAwait(false);
+                    result = new EngineScanResult(engine.Info.Id, true, [], TimeSpan.Zero, null, null);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                else
                 {
-                    result = new EngineScanResult(engine.Info.Id, false, [], TimeSpan.Zero, null, ex.Message);
+                    try
+                    {
+                        result = await engine.ScanAsync(request, engineProgress, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                    {
+                        result = new EngineScanResult(engine.Info.Id, false, [], TimeSpan.Zero, null, ex.Message);
+                    }
                 }
 
-                var inScope = result.Findings.Where(f => IsInScope(f.Location.RelativePath, inventory)).ToList();
-                var kept = inScope.DistinctBy(f => f.Fingerprint, StringComparer.Ordinal).ToList();
+                var inScope = result.Findings
+                    .Where(f => IsInScope(f.Location.RelativePath, inventory) && (!partial || changedPaths!.Contains(NormalizePath(f.Location.RelativePath))))
+                    .ToList();
+                var fresh = inScope.DistinctBy(f => f.Fingerprint, StringComparer.Ordinal).ToList();
+                var kept = result.Succeeded ? fresh.Concat(reused).DistinctBy(f => f.Fingerprint, StringComparer.Ordinal).ToList() : fresh;
                 findings.AddRange(kept);
+                if (stamp is not null && result.Succeeded && result.Error is null) cacheEntries[engine.Info.Id] = new EngineResultCache(stamp, kept);
+
                 var dropped = result.Findings.Count - inScope.Count;
+                var reuse = !partial || !result.Succeeded
+                    ? string.Empty
+                    : request.Files.Count == 0
+                        ? $" No file changed since the last scan; {reused.Count} finding(s) reused."
+                        : $" Scanned {request.Files.Count:N0} changed file(s); {readable.Length - request.Files.Count:N0} unchanged file(s) skipped and {reused.Count} finding(s) reused.";
                 var message = result.Succeeded
-                    ? $"{kept.Count} finding(s) in {result.Duration.TotalSeconds:0.0} s" +
-                      (dropped > 0 ? $"; {dropped} outside the inventory ignored" : string.Empty) +
-                      (result.Error is null ? "." : ". Warning: " + result.Error)
+                    ? $"{kept.Count} finding(s) in {result.Duration.TotalSeconds:0.0} s." + reuse +
+                      (dropped > 0 ? $" {dropped} outside the inventory ignored." : string.Empty) +
+                      (result.Error is null ? string.Empty : " Warning: " + result.Error)
                     : result.Error ?? "Engine failed.";
                 summaries.Add(new EngineRunSummary(engine.Info.Id, engine.Info.DisplayName, result.Succeeded ? "Completed" : "Failed",
                     status.Version, kept.Count, message));
@@ -174,6 +252,9 @@ public sealed class LocalFolderScanner : ILocalScanner
             try { Directory.Delete(workRoot, recursive: true); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
+
+        if (_cache is not null)
+            await _cache.SaveAsync(new ScanResultCache(root, identities, cacheEntries), cancellationToken).ConfigureAwait(false);
 
         IReadOnlyList<SecurityFinding> merged = findings
             .GroupBy(f => f.Fingerprint, StringComparer.Ordinal)
@@ -188,6 +269,43 @@ public sealed class LocalFolderScanner : ILocalScanner
             .ToArray();
         return (summaries, ordered);
     }
+
+    /// <summary>Content identity of a file: its SHA-256, or size and modification time when it was not hashed.</summary>
+    private static string Identity(FileInventoryItem file) =>
+        file.Sha256 ?? string.Create(CultureInfo.InvariantCulture, $"{file.SizeBytes}:{file.LastModifiedUtc?.UtcTicks}");
+
+    /// <summary>
+    /// Copies the changed files (same relative paths) plus the engines' folder configuration into <paramref name="target"/>,
+    /// so a folder-based engine sees only them. Returns null when that is not possible; the engine then scans everything.
+    /// </summary>
+    private static Task<string?> CopyChangedFilesAsync(string root, string target, FileInventoryItem[] changed, CancellationToken cancellationToken) =>
+        Task.Run<string?>(() =>
+        {
+            if (changed.Sum(f => f.SizeBytes) > MaxCopyBytes) return null;
+            try
+            {
+                Directory.CreateDirectory(target);
+                foreach (var name in EngineConfigFiles)
+                {
+                    var config = Path.Combine(root, name);
+                    if (File.Exists(config)) File.Copy(config, Path.Combine(target, name), overwrite: true);
+                }
+                foreach (var file in changed)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var destination = Path.GetFullPath(Path.Combine(target, file.RelativePath));
+                    if (!destination.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return null;
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.Copy(Path.Combine(root, file.RelativePath), destination, overwrite: true);
+                }
+                // An antivirus may remove a copy right away; results would then be incomplete, so scan the real folder.
+                return changed.All(f => File.Exists(Path.Combine(target, f.RelativePath))) ? target : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                return null;
+            }
+        }, cancellationToken);
 
     /// <summary>Applies each Ready enricher in turn; like engines, a failing enricher is recorded and skipped.</summary>
     private async Task<IReadOnlyList<SecurityFinding>> EnrichAsync(

@@ -20,6 +20,9 @@ public sealed class OsvScannerEngine(IExternalProcessRunner runner, Func<string,
 
     protected override IReadOnlyList<string> ExecutableNames => ["osv-scanner", "osv-scanner_windows_amd64"];
 
+    /// <summary>New advisories are published every day, so unchanged lockfiles must still be checked again.</summary>
+    public override IncrementalScanMode IncrementalMode => IncrementalScanMode.None;
+
     protected override async Task<IReadOnlyList<SecurityFinding>> RunAsync(EngineInvocation invocation, CancellationToken cancellationToken)
     {
         var root = invocation.Request.RootFolder;

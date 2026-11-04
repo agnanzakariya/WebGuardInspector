@@ -97,6 +97,14 @@
             </Grid>
             <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AutoRecord, Mode=TwoWay}" Margin="0,12,0,0"
                       Content="Record every scan and AI analysis automatically"/>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding SecondBrainFirst, Mode=TwoWay}" Margin="0,12,0,0"
+                      Content="Use the Second Brain first"/>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="50,6,0,0"
+                       Text="Before engines and AI: flag files identical (SHA-256) to files you confirmed as malicious, reuse verdicts of identical files in other projects, reuse fixes you applied for the same rule, and show earlier AI analyses. New AI requests get your earlier verdicts on similar findings as hints."/>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ReuseUnchanged, Mode=TwoWay}" Margin="0,12,0,0"
+                      Content="Skip unchanged files when scanning again"/>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="50,6,0,0"
+                       Text="Files with the same SHA-256 as in the previous scan of the folder are not sent to Semgrep, YARA-X, Gitleaks or ClamAV again; their findings are reused. A new engine version, new rules or new ClamAV signatures scan everything again. OSV-Scanner always runs in full."/>
             <TextBlock Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
                        Text="Notes are plain Markdown with properties and links (Projects, Scans, Findings, Rules, Dashboard). Secrets are redacted before writing; your own text in a note is never overwritten. Leave empty to turn the Second Brain off."/>
           </StackPanel>

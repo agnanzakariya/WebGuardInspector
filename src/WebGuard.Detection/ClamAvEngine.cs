@@ -29,6 +29,17 @@ public sealed partial class ClamAvEngine(IExternalProcessRunner runner, Func<str
         ? null
         : "No ClamAV signature database yet. Download it in Settings → Components (ClamAV signatures).";
 
+    /// <summary>clamscan takes a file list, so only changed files are listed. New signatures invalidate the cache.</summary>
+    public override IncrementalScanMode IncrementalMode => IncrementalScanMode.ChangedFilesList;
+
+    protected override IEnumerable<string> AdditionalStampFiles()
+    {
+        var folder = _databaseFolder();
+        return Directory.Exists(folder)
+            ? Directory.EnumerateFiles(folder).Where(f => Path.GetExtension(f) is ".cvd" or ".cld" or ".cud")
+            : [];
+    }
+
     protected override string ReadyMessage(string executablePath) =>
         $"{executablePath} · {ClamAvDatabase.Inspect(_databaseFolder()).Describe()}";
 

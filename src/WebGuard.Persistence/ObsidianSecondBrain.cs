@@ -83,6 +83,7 @@ public sealed partial class ObsidianSecondBrain(Func<SecondBrainSettings> settin
             MarkAbsent(vault, project, findingLinks.Select(f => f.Link), scanLink, report);
             UpdateProject(vault, project, report, scanLink, findingLinks);
             UpdateDashboard(vault);
+            UpdateKnownFiles(vault, project, report);
         }
         finally
         {
@@ -654,6 +655,9 @@ public sealed partial class ObsidianSecondBrain(Func<SecondBrainSettings> settin
         }
         return null;
     }
+
+    /// <summary>Name of the project note for a scanned folder, or null without a vault.</summary>
+    public string? ProjectNameFor(string rootFolder) => TryVault(out var vault) ? ProjectName(vault, rootFolder) : null;
 
     /// <summary>Folder name, made unique with a short hash when another folder of the same name was recorded.</summary>
     private static string ProjectName(string vault, string root)

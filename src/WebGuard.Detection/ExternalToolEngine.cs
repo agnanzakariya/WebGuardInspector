@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using WebGuard.Core.Detection;
 using WebGuard.Core.Findings;
@@ -18,7 +21,7 @@ public sealed record EngineInvocation(string ExecutablePath, string? Version, IR
 /// Shared plumbing for CLI engines: executable resolution (absolute path only), version probe, rule discovery,
 /// timing and error mapping. Adapters only build arguments and parse output.
 /// </summary>
-public abstract partial class ExternalToolEngine : ISecurityEngine
+public abstract partial class ExternalToolEngine : ISecurityEngine, IIncrementalSecurityEngine
 {
     protected const long DefaultMaxOutputBytes = 64L * 1024 * 1024;
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(30);
@@ -53,6 +56,44 @@ public abstract partial class ExternalToolEngine : ISecurityEngine
 
     /// <summary>Status text when the engine is ready; the executable path by default.</summary>
     protected virtual string ReadyMessage(string executablePath) => executablePath;
+
+    /// <summary>Per-file tools scan a temporary folder holding only the changed files; override for other behaviour.</summary>
+    public virtual IncrementalScanMode IncrementalMode => IncrementalScanMode.ChangedFilesFolder;
+
+    /// <summary>Extra configuration that decides the result besides version and rules (e.g. a signature database).</summary>
+    protected virtual IEnumerable<string> AdditionalStampFiles() => [];
+
+    public string? ConfigurationStamp(EngineStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        if (status.Availability != EngineAvailability.Ready || status.ExecutablePath is null) return null;
+        try
+        {
+            var material = new StringBuilder()
+                .Append(Info.Id).Append('|').Append(status.Version).Append('|').Append(status.ExecutablePath).Append('|')
+                .Append(FileStamp(status.ExecutablePath));
+            foreach (var rule in ResolveRules(_options(Info.Id)).Concat(AdditionalStampFiles()).Order(StringComparer.OrdinalIgnoreCase))
+            {
+                var files = Directory.Exists(rule)
+                    ? Directory.EnumerateFiles(rule, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase)
+                    : (IEnumerable<string>)[rule];
+                foreach (var file in files) material.Append('\n').Append(file).Append('|').Append(FileStamp(file));
+            }
+            return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static string FileStamp(string path)
+    {
+        var info = new FileInfo(path);
+        return info.Exists
+            ? string.Create(CultureInfo.InvariantCulture, $"{info.Length}:{info.LastWriteTimeUtc.Ticks}")
+            : "missing";
+    }
 
     public async Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken)
     {

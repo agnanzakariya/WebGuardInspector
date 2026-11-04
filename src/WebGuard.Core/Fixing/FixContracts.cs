@@ -45,7 +45,8 @@ public sealed record FixRequest(
     IReadOnlyList<SecurityFinding> OtherFindingsInFile,
     string? TargetPath = null,
     FileExcerpt? Excerpt = null,
-    DependencyFixPlan? Dependency = null)
+    DependencyFixPlan? Dependency = null,
+    string? PriorKnowledge = null)
 {
     /// <summary>Relative path of the file the proposed edits apply to.</summary>
     public string EditPath => TargetPath ?? Finding.Location.RelativePath;

@@ -30,6 +30,12 @@ public sealed record ScanOptions
     /// <summary>Upper bound for a single security engine run.</summary>
     public TimeSpan EngineTimeout { get; init; } = DefaultEngineTimeout;
 
+    /// <summary>
+    /// Reuse the findings of files that did not change since the previous scan of the same folder (same SHA-256, same
+    /// engine version, rules and signatures) instead of sending them to the engines again.
+    /// </summary>
+    public bool ReuseUnchangedResults { get; init; } = true;
+
     public static ScanOptions Default { get; } = new();
 
     public ScanOptions Normalize() => this with

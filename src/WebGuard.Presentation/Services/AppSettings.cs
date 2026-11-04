@@ -45,6 +45,15 @@ public sealed record AppSettings
     /// <summary>Record every scan and AI analysis automatically.</summary>
     public bool SecondBrainAutoRecord { get; init; } = true;
 
+    /// <summary>
+    /// Use the Second Brain before engines and AI: flag files identical to confirmed malicious ones, reuse verdicts of
+    /// identical files, reuse applied fixes and earlier analyses, and give the AI earlier verdicts as hints.
+    /// </summary>
+    public bool SecondBrainFirst { get; init; } = true;
+
+    /// <summary>Skip files that did not change since the previous scan of the folder and reuse their findings.</summary>
+    public bool ReuseUnchangedScanResults { get; init; } = true;
+
     /// <summary>Look for a newer release on GitHub when the app starts (at most once a day).</summary>
     public bool CheckForUpdates { get; init; } = true;
 
@@ -74,6 +83,7 @@ public sealed record AppSettings
         ExcludedDirectories = ExcludedDirectories,
         MaxHashBytes = Math.Max(1, MaxHashMegabytes) * 1024L * 1024L,
         MaxDegreeOfParallelism = MaxDegreeOfParallelism,
+        ReuseUnchangedResults = ReuseUnchangedScanResults,
     }.Normalize();
 
     public ExternalToolOptions ToolOptions(string engineId)

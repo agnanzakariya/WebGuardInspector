@@ -79,12 +79,18 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         _settings = settings;
         _launcher = launcher;
         OpenNoteCommand = new RelayCommand(OpenNote, () => SelectedFinding is not null && _secondBrain?.GetFindingNoteUri(SelectedFinding.Finding.Fingerprint) is not null);
-        AnalyzeCommand = new AsyncRelayCommand(AnalyzeSelectedAsync, () => _analyst is not null && SelectedFinding is not null && !IsAnalyzing,
+        AnalyzeCommand = new AsyncRelayCommand(() => AnalyzeSelectedAsync(), () => _analyst is not null && SelectedFinding is not null && !IsAnalyzing,
+            ex => AnalysisMessage = "AI analysis failed: " + ex.Message);
+        ReanalyzeCommand = new AsyncRelayCommand(() => AnalyzeSelectedAsync(askModel: true),
+            () => _analyst is not null && CurrentAnalysis is { FromSecondBrain: true } && !IsAnalyzing,
             ex => AnalysisMessage = "AI analysis failed: " + ex.Message);
         CancelAnalysisCommand = new RelayCommand(() => _analysisCts?.Cancel(), () => IsAnalyzing);
     }
 
     public AsyncRelayCommand AnalyzeCommand { get; }
+
+    /// <summary>Asks the model although an earlier analysis was found in the Second Brain.</summary>
+    public AsyncRelayCommand ReanalyzeCommand { get; }
     public ICommand OpenNoteCommand { get; }
     public bool HasSecondBrain => _secondBrain is not null;
     public string ValidationMessage { get => _validationMessage; private set => SetProperty(ref _validationMessage, value); }
@@ -154,6 +160,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         {
             if (!SetProperty(ref _isAnalyzing, value)) return;
             AnalyzeCommand.RaiseCanExecuteChanged();
+            ReanalyzeCommand.RaiseCanExecuteChanged();
             (CancelAnalysisCommand as IRaiseCanExecuteChanged)?.RaiseCanExecuteChanged();
         }
     }
@@ -173,6 +180,11 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         {
             if ((await _secondBrain.GetStatusAsync(CancellationToken.None).ConfigureAwait(true)).Availability != EngineAvailability.Ready) return string.Empty;
             await _secondBrain.SaveAnalysisAsync(finding, analysis, CancellationToken.None).ConfigureAwait(true);
+            if (_secondBrain is IKnowledgeMemory memory)
+            {
+                await memory.RememberAnalysisAsync(finding, KnowledgeLookup.FileSha(_report, finding), analysis,
+                    _report is null ? null : Path.GetFileName(_report.RootFolder.TrimEnd('\\', '/')), CancellationToken.None).ConfigureAwait(true);
+            }
             return "Saved to the Second Brain.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -189,19 +201,38 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
         _analysisCts = null;
     }
 
-    internal async Task AnalyzeSelectedAsync()
+    /// <summary>
+    /// With "Second Brain first", an earlier analysis of this finding (or of the same rule and line in an identical file)
+    /// is shown without asking the model; <paramref name="askModel"/> forces a fresh one. A new analysis gets earlier
+    /// human verdicts on similar findings as hints.
+    /// </summary>
+    internal async Task AnalyzeSelectedAsync(bool askModel = false)
     {
         if (_analyst is null || _report is null || SelectedFinding is null || IsAnalyzing) return;
         var finding = SelectedFinding.Finding;
         _analysisCts = new CancellationTokenSource();
         IsAnalyzing = true;
-        AnalysisMessage = "Analyzing with the local model… this can take a minute on CPU.";
+        AnalysisMessage = "Checking the Second Brain…";
         try
         {
-            var context = FindingContextBuilder.Build(new ProjectScope(_report.RootFolder), finding, _all);
+            var memory = await KnowledgeLookup.MemoryAsync(_secondBrain, _settings, _analysisCts.Token).ConfigureAwait(true);
+            if (memory is not null && !askModel &&
+                await memory.FindAnalysisAsync(finding, KnowledgeLookup.FileSha(_report, finding), _analysisCts.Token).ConfigureAwait(true) is { } earlier)
+            {
+                var same = earlier.Fingerprint == finding.Fingerprint;
+                _analyses[finding.Id] = new AiAnalysisViewModel(earlier.Analysis with { FindingId = finding.Id }, fromSecondBrain: true);
+                AnalysisMessage = (same ? "Shown from the Second Brain: this finding was analysed before" : $"Shown from the Second Brain: an identical file ({earlier.RelativePath}{(earlier.Project is null ? "" : " in " + earlier.Project)}) was analysed before") +
+                                  "; the model was not asked. Use Ask AI again for a fresh analysis.";
+                return;
+            }
+
+            AnalysisMessage = "Analyzing with the local model… this can take a minute on CPU.";
+            var prior = memory is null ? null : await KnowledgeLookup.PriorKnowledgeAsync(_secondBrain!, finding, _analysisCts.Token).ConfigureAwait(true);
+            var context = FindingContextBuilder.Build(new ProjectScope(_report.RootFolder), finding, _all) with { PriorKnowledge = prior };
             var analysis = await _analyst.AnalyzeAsync(context, _analysisCts.Token).ConfigureAwait(true);
             _analyses[finding.Id] = new AiAnalysisViewModel(analysis);
-            AnalysisMessage = await RememberAnalysisAsync(finding, analysis).ConfigureAwait(true);
+            AnalysisMessage = (prior is null ? string.Empty : "Earlier verdicts on similar findings were given to the model as hints. ") +
+                              await RememberAnalysisAsync(finding, analysis).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -218,6 +249,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
             IsAnalyzing = false;
             OnPropertyChanged(nameof(CurrentAnalysis));
             OnPropertyChanged(nameof(HasCurrentAnalysis));
+            ReanalyzeCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -252,6 +284,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
             OnPropertyChanged(nameof(HasCurrentAnalysis));
             if (!IsAnalyzing) AnalysisMessage = string.Empty;
             AnalyzeCommand.RaiseCanExecuteChanged();
+            ReanalyzeCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -671,6 +704,8 @@ public sealed class SettingsViewModel : PageViewModel
     private string _aiModel = string.Empty;
     private string _vaultPath = string.Empty;
     private bool _autoRecord;
+    private bool _secondBrainFirst;
+    private bool _reuseUnchanged;
     private readonly IFolderPicker? _folderPicker;
     private string _saveMessage = string.Empty;
     private bool _claudeFixEnabled;
@@ -751,6 +786,8 @@ public sealed class SettingsViewModel : PageViewModel
     public string AiModel { get => _aiModel; set => SetProperty(ref _aiModel, value?.Trim() ?? string.Empty); }
     public string VaultPath { get => _vaultPath; set => SetProperty(ref _vaultPath, value?.Trim().Trim('"') ?? string.Empty); }
     public bool AutoRecord { get => _autoRecord; set => SetProperty(ref _autoRecord, value); }
+    public bool SecondBrainFirst { get => _secondBrainFirst; set => SetProperty(ref _secondBrainFirst, value); }
+    public bool ReuseUnchanged { get => _reuseUnchanged; set => SetProperty(ref _reuseUnchanged, value); }
     public ICommand BrowseVaultCommand { get; }
     public bool ClaudeFixEnabled { get => _claudeFixEnabled; set => SetProperty(ref _claudeFixEnabled, value); }
 
@@ -843,6 +880,8 @@ public sealed class SettingsViewModel : PageViewModel
             AiModel = AiModel.Length == 0 ? null : AiModel,
             SecondBrainVaultPath = VaultPath.Length == 0 ? null : VaultPath,
             SecondBrainAutoRecord = AutoRecord,
+            SecondBrainFirst = SecondBrainFirst,
+            ReuseUnchangedScanResults = ReuseUnchanged,
             ClaudeFixEnabled = ClaudeFixEnabled,
             FixProvider = _fixProvider,
             ClaudeCliPath = ClaudeCliPath.Length == 0 ? null : ClaudeCliPath,
@@ -867,6 +906,8 @@ public sealed class SettingsViewModel : PageViewModel
         AiEndpoint = defaults.AiEndpoint;
         AiModel = string.Empty;
         AutoRecord = defaults.SecondBrainAutoRecord;
+        SecondBrainFirst = defaults.SecondBrainFirst;
+        ReuseUnchanged = defaults.ReuseUnchangedScanResults;
         ClaudeFixEnabled = defaults.ClaudeFixEnabled;
         FixProviderChoice = ClaudeProviderChoice;
         ClaudeCliPath = string.Empty;
@@ -891,12 +932,14 @@ public sealed class SettingsViewModel : PageViewModel
         AiModel = s.AiModel ?? string.Empty;
         VaultPath = s.SecondBrainVaultPath ?? string.Empty;
         AutoRecord = s.SecondBrainAutoRecord;
+        SecondBrainFirst = s.SecondBrainFirst;
+        ReuseUnchanged = s.ReuseUnchangedScanResults;
         ClaudeFixEnabled = s.ClaudeFixEnabled;
         FixProviderChoice = s.FixProvider == FixProvider.LocalModel ? LocalProviderChoice : ClaudeProviderChoice;
         ClaudeCliPath = s.ClaudeCliPath ?? string.Empty;
         ClaudeModel = s.ClaudeModel ?? string.Empty;
         EngineSettings.Clear();
-        foreach (var engine in EngineCatalog.Engines.Where(e => !string.Equals(e.Id, "malware-hash", StringComparison.Ordinal)))
+        foreach (var engine in EngineCatalog.Engines.Where(e => e.Id is not ("malware-hash" or "second-brain")))
         {
             EngineSettings.Add(new EngineSettingViewModel(engine.Id, engine.Name,
                 s.EngineExecutables.TryGetValue(engine.Id, out var path) ? path : string.Empty,

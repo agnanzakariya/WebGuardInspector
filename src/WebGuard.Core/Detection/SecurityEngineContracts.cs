@@ -93,3 +93,32 @@ public sealed record ProcessRunRequest(
     string? StandardInput = null);
 
 public sealed record ProcessRunResult(int ExitCode, string StandardOutput, string StandardError, TimeSpan Duration, bool TimedOut, bool OutputTruncated);
+
+/// <summary>How an engine can re-scan only the files that changed since its last run.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<IncrementalScanMode>))]
+public enum IncrementalScanMode
+{
+    /// <summary>Always scans everything (e.g. results depend on an online database that changes daily).</summary>
+    None,
+
+    /// <summary>Scans exactly <see cref="EngineScanRequest.Files"/> under the real root folder.</summary>
+    ChangedFilesList,
+
+    /// <summary>Scans a whole folder; it is given a temporary copy that holds only the changed files.</summary>
+    ChangedFilesFolder,
+}
+
+/// <summary>
+/// An engine whose result for a file depends only on that file's bytes and the engine's configuration, so the
+/// findings of unchanged files can be reused from the previous scan.
+/// </summary>
+public interface IIncrementalSecurityEngine
+{
+    IncrementalScanMode IncrementalMode { get; }
+
+    /// <summary>
+    /// Identifies everything besides the files that decides the result: version, rules, signature database.
+    /// Cached findings are reused only while it is unchanged. Null when it cannot be determined (no reuse).
+    /// </summary>
+    string? ConfigurationStamp(EngineStatus status);
+}

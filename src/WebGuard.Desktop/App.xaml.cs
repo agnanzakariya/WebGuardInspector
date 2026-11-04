@@ -60,29 +60,31 @@ public partial class App : Application
             new ThreatFoxHashIntelligence(http, cache, Intelligence),
         ];
 
+        // Local model calls can take minutes on CPU; each analysis has its own timeout instead of the client's.
+        var aiHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        AiSettings Ai() => new(settings.Current.AiEnabled, settings.Current.AiEndpoint, settings.Current.AiModel);
+        var secondBrain = new ObsidianSecondBrain(() => new SecondBrainSettings(settings.Current.SecondBrainVaultPath),
+            new LocalEmbeddingService(new OpenAiCompatibleClient(aiHttp), Ai));
+
         var processRunner = new ExternalProcessRunner();
         IReadOnlyList<ISecurityEngine> engines =
         [
+            // First: files identical to ones you confirmed as malicious need no engine or lookup.
+            new SecondBrainMemoryEngine(secondBrain, () => settings.Current.SecondBrainFirst),
             .. SecurityEngineCatalog.CreateDefault(processRunner, id => settings.Current.ToolOptions(id)),
             new MalwareHashLookupEngine(malware),
         ];
         IFindingEnricher[] enrichers = [new KnownExploitedEnricher(kev, Intelligence)];
-
-        // Local model calls can take minutes on CPU; each analysis has its own timeout instead of the client's.
-        var aiHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-        AiSettings Ai() => new(settings.Current.AiEnabled, settings.Current.AiEndpoint, settings.Current.AiModel);
         var analyst = new LocalAiSecurityAnalyst(new OpenAiCompatibleClient(aiHttp), Ai);
         var mcp = new StdioMcpServerHost(StdioMcpServerHost.BundledExecutablePath);
         var clipboard = new ClipboardService();
         var dialogs = new DialogService();
         var launcher = new ExternalLauncher(dialogs);
         var folderPicker = new FolderPicker();
-        var secondBrain = new ObsidianSecondBrain(() => new SecondBrainSettings(settings.Current.SecondBrainVaultPath),
-            new LocalEmbeddingService(new OpenAiCompatibleClient(aiHttp), Ai));
         var history = new InMemoryScanHistoryStore();
 
         var workspace = new ScanWorkspaceViewModel(
-            new LocalFolderScanner(engines, enrichers),
+            new LocalFolderScanner(engines, enrichers, resultCache: new FileScanResultCacheStore(FileScanResultCacheStore.DefaultDirectory)),
             new JsonReportExporter(),
             history,
             settings,

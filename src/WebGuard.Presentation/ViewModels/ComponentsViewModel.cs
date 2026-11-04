@@ -172,7 +172,7 @@ public sealed class ComponentsViewModel : ObservableObject
     private async Task<List<InstalledComponent>> FindInstalledAsync(CancellationToken cancellationToken)
     {
         var list = new List<InstalledComponent>();
-        foreach (var engine in _engines.Where(e => e.Info.Id != "malware-hash"))
+        foreach (var engine in _engines.Where(e => e.Info.Id is not ("malware-hash" or "second-brain")))
         {
             var status = await engine.GetStatusAsync(cancellationToken).ConfigureAwait(true);
             list.Add(new InstalledComponent(engine.Info.Id, engine.Info.DisplayName, status.Version, Existing(status.ExecutablePath)));

@@ -110,6 +110,11 @@ public sealed partial class LocalAiSecurityAnalyst(OpenAiCompatibleClient client
             sb.AppendLine();
             sb.AppendLine("SAME RULE ELSEWHERE IN THE PROJECT: " + string.Join("; ", context.SimilarFindings.Select(s => s.Location.ToString())));
         }
+        if (!string.IsNullOrWhiteSpace(context.PriorKnowledge))
+        {
+            sb.AppendLine();
+            sb.Append(context.PriorKnowledge.TrimEnd()).AppendLine();
+        }
         return sb.ToString();
     }
 

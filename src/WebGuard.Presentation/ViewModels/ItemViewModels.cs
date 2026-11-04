@@ -209,15 +209,19 @@ public sealed class McpToolViewModel(McpToolDescriptor tool)
 }
 
 /// <summary>An AI explanation of one finding. Always shown as an unverified hypothesis.</summary>
-public sealed class AiAnalysisViewModel(AiAnalysis analysis)
+public sealed class AiAnalysisViewModel(AiAnalysis analysis, bool fromSecondBrain = false)
 {
     public AiAnalysis Analysis { get; } = analysis;
+
+    /// <summary>Reused from the Second Brain instead of asking the model.</summary>
+    public bool FromSecondBrain { get; } = fromSecondBrain;
     public string Summary => Analysis.Summary;
     public string WhyRisky => Analysis.WhyRisky;
     public bool HasWhyRisky => !string.IsNullOrWhiteSpace(Analysis.WhyRisky);
     public string? Remediation => Analysis.ProposedRemediation;
     public bool HasRemediation => !string.IsNullOrWhiteSpace(Analysis.ProposedRemediation);
-    public string Footer => $"{Analysis.Model} · {Analysis.Confidence} confidence · {DisplayFormat.DateTime(Analysis.CreatedAtUtc)}";
+    public string Footer => (FromSecondBrain ? "From the Second Brain · " : string.Empty) +
+                            $"{Analysis.Model} · {Analysis.Confidence} confidence · {DisplayFormat.DateTime(Analysis.CreatedAtUtc)}";
 }
 
 /// <summary>Deterministic observation from the inventory. Not a finding: it only points to where the engines will look.</summary>

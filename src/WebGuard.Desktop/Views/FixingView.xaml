@@ -159,6 +159,14 @@
                   <TextBlock Text="Apply fix" Margin="6,0,0,0" FontSize="12"/>
                 </StackPanel>
               </Button>
+              <Button Style="{StaticResource Button.Secondary}" Command="{Binding AskAiCommand}" Padding="12,6" Margin="0,0,8,6"
+                      Visibility="{Binding SelectedItem.FromSecondBrain, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
+                      ToolTip="This fix was reused from the Second Brain. Ask the AI chosen in Settings for a new proposal instead.">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="12"/>
+                  <TextBlock Text="Ask AI instead" Margin="6,0,0,0" FontSize="12"/>
+                </StackPanel>
+              </Button>
               <Button Style="{StaticResource Button.Secondary}" Command="{Binding UndoCommand}" Padding="12,6" Margin="0,0,8,6"
                       Visibility="{Binding SelectedItem.CanUndo, Converter={StaticResource BoolToVisibility}}"
                       ToolTip="Restore the original file from the backup">

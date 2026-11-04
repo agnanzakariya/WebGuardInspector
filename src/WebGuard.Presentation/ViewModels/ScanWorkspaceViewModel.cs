@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Input;
+using WebGuard.Core.Findings;
 using WebGuard.Core.Knowledge;
 using WebGuard.Core.Reporting;
 using WebGuard.Core.Scanning;
@@ -265,21 +266,57 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
             if ((await _secondBrain.GetStatusAsync(CancellationToken.None).ConfigureAwait(true)).Availability != Core.Detection.EngineAvailability.Ready)
                 return (report, null);
             var verdicts = await _secondBrain.GetValidationStatusesAsync(report.Findings.Select(f => f.Fingerprint), CancellationToken.None).ConfigureAwait(true);
-            if (verdicts.Count > 0)
+            var fromIdentical = _settings.Current.SecondBrainFirst
+                ? await IdenticalFileVerdictsAsync(report, verdicts).ConfigureAwait(true)
+                : new Dictionary<string, ValidationStatus>();
+            if (verdicts.Count + fromIdentical.Count > 0)
             {
                 report = report with
                 {
-                    Findings = report.Findings.Select(f => verdicts.TryGetValue(f.Fingerprint, out var s) ? f with { Status = s } : f).ToArray(),
+                    Findings = report.Findings.Select(f =>
+                        verdicts.TryGetValue(f.Fingerprint, out var s) || fromIdentical.TryGetValue(f.Fingerprint, out s) ? f with { Status = s } : f).ToArray(),
                 };
             }
-            if (!_settings.Current.SecondBrainAutoRecord) return (report, verdicts.Count > 0 ? $"{verdicts.Count} verdict(s) from the Second Brain applied." : null);
+            var applied = verdicts.Count + fromIdentical.Count == 0
+                ? null
+                : $"{verdicts.Count + fromIdentical.Count} verdict(s) from the Second Brain applied" +
+                  (fromIdentical.Count > 0 ? $" ({fromIdentical.Count} from identical files elsewhere)." : ".");
+            if (!_settings.Current.SecondBrainAutoRecord) return (report, applied);
             await _secondBrain.SaveScanAsync(report, CancellationToken.None).ConfigureAwait(true);
-            return (report, "Recorded in the Second Brain.");
+            return (report, "Recorded in the Second Brain." + (applied is null ? string.Empty : " " + applied));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             return (report, "Second Brain not updated: " + ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Verdicts for findings that have none of their own, taken from the same rule at the same line of a file with the
+    /// same SHA-256 that a person already judged (e.g. the same plugin file in another project or folder).
+    /// </summary>
+    private async Task<Dictionary<string, ValidationStatus>> IdenticalFileVerdictsAsync(ScanReport report, IReadOnlyDictionary<string, ValidationStatus> own)
+    {
+        var result = new Dictionary<string, ValidationStatus>(StringComparer.Ordinal);
+        if (_secondBrain is not IKnowledgeMemory memory) return result;
+        var hashes = report.Files.Where(f => f.Sha256 is not null)
+            .GroupBy(f => f.RelativePath.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Sha256!, StringComparer.OrdinalIgnoreCase);
+        var open = report.Findings
+            .Where(f => !own.ContainsKey(f.Fingerprint) && hashes.ContainsKey(f.Location.RelativePath.Replace('\\', '/')))
+            .ToArray();
+        if (open.Length == 0) return result;
+        var known = await memory.GetKnownFindingsAsync(open.Select(f => hashes[f.Location.RelativePath.Replace('\\', '/')]).Distinct().ToArray(),
+            CancellationToken.None).ConfigureAwait(true);
+        var verified = known.Where(k => k.IsVerified).ToArray();
+        foreach (var f in open)
+        {
+            var sha = hashes[f.Location.RelativePath.Replace('\\', '/')];
+            var match = verified.FirstOrDefault(k => string.Equals(k.Sha256, sha, StringComparison.OrdinalIgnoreCase) &&
+                                                     k.EngineId == f.EngineId && k.RuleId == f.RuleId && k.StartLine == f.Location.StartLine);
+            if (match is not null) result[f.Fingerprint] = match.Status;
+        }
+        return result;
     }
 
     internal void LoadReport(ScanReport report, ScanReport? previous)

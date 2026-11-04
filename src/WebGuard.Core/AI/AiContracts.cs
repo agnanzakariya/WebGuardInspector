@@ -5,7 +5,9 @@ using WebGuard.Core.Findings;
 namespace WebGuard.Core.AI;
 
 /// <summary>Context handed to the AI analyst. Built by MCP tools with folder scope and secret redaction applied.</summary>
-public sealed record FindingContext(SecurityFinding Finding, string RedactedSourceExcerpt, IReadOnlyList<SecurityFinding> SimilarFindings);
+/// <param name="PriorKnowledge">Earlier human verdicts on similar findings from the Second Brain (prompt text), if any.</param>
+public sealed record FindingContext(SecurityFinding Finding, string RedactedSourceExcerpt, IReadOnlyList<SecurityFinding> SimilarFindings,
+    string? PriorKnowledge = null);
 
 /// <summary>AI output is always a hypothesis until a human validates it.</summary>
 public sealed record AiAnalysis(

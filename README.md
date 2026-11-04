@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.11.0
+# Azura — WebGuard Inspector v1.0.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -283,6 +283,28 @@ Rules/<engine> — <rule>.md         semua temuan sebuah aturan + catatan tim te
 - Scan tanpa engine yang berjalan dicatat sebagai `not-analyzed`, bukan "aman".
 - Secret selalu diredaksi sebelum ditulis; embedding untuk pencarian disimpan di `.webguard/` (diabaikan Obsidian).
 
+### Second Brain lebih dulu
+
+Second Brain bukan hanya catatan: pengetahuan di dalamnya dipakai sebelum engine dan AI, supaya analisis berikutnya lebih cepat
+(**Settings → Second Brain**, keduanya aktif secara bawaan):
+
+- **Skip unchanged files when scanning again** — setiap folder punya cache hasil scan (`%LOCALAPPDATA%\WebGuardInspector\scan-cache`,
+  hanya hash file dan temuan teredaksi). File dengan SHA-256 yang sama seperti scan sebelumnya tidak dikirim lagi ke Semgrep,
+  YARA-X, Gitleaks dan ClamAV; temuannya dipakai ulang. ClamAV hanya menerima daftar file yang berubah; engine lain memindai
+  salinan sementara yang berisi file yang berubah saja. Versi engine, rule atau signature ClamAV yang baru membuat semua
+  file di-scan ulang; OSV-Scanner selalu penuh (advisory baru terbit setiap hari).
+- **Use the Second Brain first**:
+  - engine **Second Brain memory** (berjalan paling awal) menandai file yang identik (SHA-256) dengan file yang pernah Anda
+    tandai *Confirmed* sebagai malware/pola mencurigakan, di proyek atau path mana pun, tanpa signature engine atau lookup online;
+  - keputusan Anda (mis. *FalsePositive*) ikut berlaku untuk rule dan baris yang sama di file identik di proyek lain;
+  - Fixing memakai ulang fix yang pernah Anda *Apply* untuk rule yang sama bila edit-nya cocok dengan file baru di sekitar
+    temuan (tanpa memanggil AI; tombol **Ask AI instead** untuk usulan baru);
+  - AI Analyst menampilkan analisis lama untuk temuan yang sama atau file identik (tombol **Ask AI again** untuk analisis baru);
+  - permintaan baru ke AI menyertakan keputusan Anda pada temuan serupa (pencarian semantik) sebagai petunjuk.
+
+Indeksnya disimpan di `.webguard/` vault (`known-files.json`, `fixes.json`, `analyses.json`); status selalu dibaca dari
+catatan, jadi status yang diubah di Obsidian ikut dipakai.
+
 ## Fixing dengan AI (Claude atau model lokal)
 
 Di **Settings → AI fixing** (dan langkah *AI fixing* di wizard) pilih siapa yang mengusulkan perbaikan:
@@ -337,6 +359,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**1.0.0** — Rilis produksi pertama. Second Brain lebih dulu: scan ulang hanya mengirim file yang berubah ke engine (cache per folder, `IIncrementalSecurityEngine`, `FileScanResultCacheStore`); engine *Second Brain memory* untuk file identik yang sudah dikonfirmasi berbahaya; keputusan berlaku untuk file identik di proyek lain; fix yang pernah diterapkan dan analisis AI lama dipakai ulang; keputusan serupa disertakan di prompt AI. Diuji dengan engine asli: scan ulang tanpa perubahan 26,7 s → 3,9 s. 100 tests.
 
 **0.11.0** — Pilihan provider untuk Fixing: Claude (Claude Code CLI) atau model lokal (LM Studio/Ollama) di Settings dan wizard; `LocalModelCodeFixer` + `SelectableCodeFixer`; batas ukuran per provider (`FixLimits`); teks halaman Fixing netral. Diuji live dengan qwen/qwen3.5-9b di LM Studio. 95 tests.
 
