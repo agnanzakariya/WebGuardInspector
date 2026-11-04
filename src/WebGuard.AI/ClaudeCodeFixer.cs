@@ -70,6 +70,8 @@ public sealed class ClaudeCodeFixer(IExternalProcessRunner runner, Func<ClaudeCo
         "\"required\":[\"verdict\",\"explanation\",\"confidence\",\"edits\"]}";
 
     public string DisplayName => "Claude Code (your Claude login)";
+    public string ShortName => "Claude";
+    public FixLimits Limits => FixLimits.Claude;
 
     public async Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken)
     {
@@ -241,7 +243,8 @@ public sealed class ClaudeCodeFixer(IExternalProcessRunner runner, Func<ClaudeCo
         }
     }
 
-    private static FixProposal FromAnswer(Guid findingId, string model, JsonElement answer, DateTimeOffset createdAtUtc)
+    /// <summary>Maps the answer object (verdict, explanation, confidence, edits, follow_up_command); shared with the local-model fixer.</summary>
+    internal static FixProposal FromAnswer(Guid findingId, string model, JsonElement answer, DateTimeOffset createdAtUtc)
     {
         string Str(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? string.Empty : string.Empty;
         var verdict = Str(answer, "verdict").ToUpperInvariant() switch

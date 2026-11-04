@@ -54,8 +54,11 @@ public sealed record AppSettings
     /// <summary>True once the first-run setup wizard was finished; until then the app shows only the wizard.</summary>
     public bool SetupCompleted { get; init; }
 
-    /// <summary>Fixing findings with the Claude Code CLI under the user's own Claude login.</summary>
+    /// <summary>AI fixing on the Fixing page is on (with the provider in <see cref="FixProvider"/>).</summary>
     public bool ClaudeFixEnabled { get; init; } = true;
+
+    /// <summary>Which AI proposes fixes: Claude (Claude Code CLI) or the local model of the AI Analyst settings.</summary>
+    public FixProvider FixProvider { get; init; } = FixProvider.Claude;
 
     /// <summary>Absolute path to claude.exe; empty = auto-detect.</summary>
     public string? ClaudeCliPath { get; init; }
@@ -84,6 +87,16 @@ public sealed record AppSettings
                 "Sends package names/versions to OSV.dev. Allow external lookups in Settings → Privacy to enable.");
         return new ExternalToolOptions(engineId, path, true, rules);
     }
+}
+
+/// <summary>Who proposes fixes on the Fixing page.</summary>
+public enum FixProvider
+{
+    /// <summary>Claude Code CLI with the user's Claude login; the redacted file is sent to Anthropic.</summary>
+    Claude,
+
+    /// <summary>The local OpenAI-compatible server of the AI Analyst (LM Studio / Ollama); nothing leaves the PC.</summary>
+    LocalModel,
 }
 
 public interface ISettingsStore

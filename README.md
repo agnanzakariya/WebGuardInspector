@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v0.10.3
+# Azura — WebGuard Inspector v0.11.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -140,7 +140,7 @@ PowerShell:
 
 ```powershell
 Set-Location C:\Dev\WebGuardInspector
-.\build.ps1          # restore + build + 92 tests
+.\build.ps1          # restore + build + 95 tests
 .\build.ps1 -Run     # ... lalu jalankan aplikasi
 ```
 
@@ -152,7 +152,7 @@ Build succeeded.
 == Tests ==
   PASS  CoreTests.Byte_formatting_is_human_readable (1 ms)
   ...
-PASS: 92 tests
+PASS: 95 tests
 PASS: build and tests completed
 ```
 
@@ -185,7 +185,7 @@ src/
   WebGuard.Presentation  ViewModels (net10.0, tanpa WPF) — dapat diuji di mana saja
   WebGuard.Desktop       WPF views, tema, layanan dialog/clipboard, composition root (App.xaml.cs)
 tests/
-  WebGuard.Tests         Test runner tanpa dependency (92 tests)
+  WebGuard.Tests         Test runner tanpa dependency (95 tests)
 ```
 
 Aturan dependency: library hanya bergantung ke `WebGuard.Core`; `WebGuard.Desktop` (`App.Compose`) dan `WebGuard.Mcp`
@@ -283,7 +283,18 @@ Rules/<engine> — <rule>.md         semua temuan sebuah aturan + catatan tim te
 - Scan tanpa engine yang berjalan dicatat sebagai `not-analyzed`, bukan "aman".
 - Secret selalu diredaksi sebelum ditulis; embedding untuk pencarian disimpan di `.webguard/` (diabaikan Obsidian).
 
-## Fixing dengan Claude (v0.6)
+## Fixing dengan AI (Claude atau model lokal)
+
+Di **Settings → AI fixing** (dan langkah *AI fixing* di wizard) pilih siapa yang mengusulkan perbaikan:
+
+| Provider | Data | Batas yang dikirim |
+| --- | --- | --- |
+| **Claude** (Claude Code CLI, login Claude Anda) | File yang diredaksi dikirim ke Anthropic | File utuh s.d. 200.000 karakter, lalu cuplikan ±200 baris (maks. 60.000) |
+| **Local model** (LM Studio / Ollama, endpoint dan model AI Analyst) | Tidak ada yang keluar dari PC | File utuh s.d. 12.000 karakter, lalu cuplikan ±40 baris (maks. 8.000), jawaban maks. 2.500 token, agar muat di context 8.192 token bawaan LM Studio |
+
+Keduanya memakai prompt dan format jawaban yang sama; setiap edit tetap dicocokkan dengan file dan ditinjau sebagai diff. Model kecil kadang perlu dicoba ulang atau diganti model yang lebih besar; naikkan *context length* di LM Studio untuk file besar.
+
+### Claude Code CLI
 
 Butuh Claude Code CLI yang sudah login dengan akun Claude Anda:
 
@@ -326,6 +337,8 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
 ## Changelog
+
+**0.11.0** — Pilihan provider untuk Fixing: Claude (Claude Code CLI) atau model lokal (LM Studio/Ollama) di Settings dan wizard; `LocalModelCodeFixer` + `SelectableCodeFixer`; batas ukuran per provider (`FixLimits`); teks halaman Fixing netral. Diuji live dengan qwen/qwen3.5-9b di LM Studio. 95 tests.
 
 **0.10.3** — Fixing untuk file besar dan lockfile: cuplikan di sekitar temuan untuk file > 200.000 karakter; temuan dependency di lockfile diperbaiki lewat manifest + perintah regenerasi lockfile (ditampilkan, bisa disalin, tidak dijalankan). Diuji live dengan Claude pada `laravel/framework` 11.51.0 (`composer.lock` 464 KB). 92 tests.
 

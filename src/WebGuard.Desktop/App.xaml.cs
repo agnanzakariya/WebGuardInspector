@@ -94,9 +94,13 @@ public partial class App : Application
 
         var catalog = new EngineCatalogViewModel(engines);
         var findings = new FindingsViewModel(catalog, analyst, secondBrain, settings, launcher);
-        var fixer = new ClaudeCodeFixer(processRunner,
+        var claudeFixer = new ClaudeCodeFixer(processRunner,
             () => new ClaudeCodeSettings(settings.Current.ClaudeFixEnabled, settings.Current.ClaudeCliPath, settings.Current.ClaudeModel),
             () => ExecutableLocator.Find(["claude"]));
+        // The local fixer uses the AI Analyst's endpoint and model; Settings decides which one the Fixing page uses.
+        var localFixer = new LocalModelCodeFixer(new OpenAiCompatibleClient(aiHttp),
+            () => new AiSettings(true, settings.Current.AiEndpoint, settings.Current.AiModel), () => settings.Current.ClaudeFixEnabled);
+        var fixer = new SelectableCodeFixer(() => settings.Current.FixProvider == FixProvider.LocalModel, claudeFixer, localFixer);
         var fixing = new FixingViewModel(findings, fixer, new FixApplier(FixApplier.DefaultBackupRoot), secondBrain, settings, clipboard);
         var setup = new SetupWizardViewModel(settings, theme, catalog, analyst, fixer, secondBrain, folderPicker);
 
@@ -115,14 +119,14 @@ public partial class App : Application
                 FileIntelligenceCache.DefaultDirectory,
                 StdioMcpServerHost.BundledExecutablePath,
                 Path.Combine(AppContext.BaseDirectory, "tools", "licenses")),
-            updates, analyst, fixer, launcher, dialogs, new InstallerLauncher());
+            updates, analyst, claudeFixer, launcher, dialogs, new InstallerLauncher());
         var componentHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         componentHttp.DefaultRequestHeaders.UserAgent.ParseAdd($"WebGuardInspector/{AppInfo.Version}");
         var components = new ComponentsViewModel(engines, catalog,
             new ComponentUpdateService(componentHttp, processRunner, Path.Combine(AppContext.BaseDirectory, "tools"),
                 () => ExecutableLocator.Find(["winget"]),
                 [new ClamAvSignatureDatabase(processRunner, () => ClamscanPath(settings.Current))]),
-            fixer, dialogs);
+            claudeFixer, dialogs);
 
         return new ShellViewModel(
             workspace,

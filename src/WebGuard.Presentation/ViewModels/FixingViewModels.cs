@@ -75,7 +75,7 @@ public sealed class FixItemViewModel(SecurityFinding finding) : ObservableObject
     public string StateText => State switch
     {
         FixState.NotStarted => "Not started",
-        FixState.Working => "Asking Claude…",
+        FixState.Working => "Asking the AI…",
         FixState.Proposed => "Fix ready to review",
         FixState.FalsePositive => "Likely false positive",
         FixState.CannotFix => "Needs manual action",
@@ -180,7 +180,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
     private bool _isWorking;
     private string _progressText = string.Empty;
     private string _message = string.Empty;
-    private string _fixerStatusText = "Checking Claude Code…";
+    private string _fixerStatusText = "Checking the AI fixer…";
     private StatusTone _fixerTone = StatusTone.Neutral;
     private bool _isFixerReady;
 
@@ -218,7 +218,14 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
 
     public override PageKey Key => PageKey.Fixing;
     public override string Title => "Fixing";
-    public override string Subtitle => "Claude proposes the change · you review the diff · Apply keeps a backup";
+    public override string Subtitle => "AI proposes the change · you review the diff · Apply keeps a backup";
+
+    /// <summary>The fixer chosen in Settings, e.g. "Claude Code (your Claude login)" or "Local model (LM Studio / Ollama)".</summary>
+    public string FixerName => _fixer?.DisplayName ?? "AI fixer";
+    public string FixButtonText => _fixer?.ShortName == "Claude" ? "Fix with Claude" : "Fix with local AI";
+
+    /// <summary>"Claude" / "The local model" at the start of a sentence.</summary>
+    private string Who => _fixer is null ? "The AI" : char.ToUpperInvariant(_fixer.ShortName[0]) + _fixer.ShortName[1..];
 
     public ObservableCollection<FixItemViewModel> Items { get; } = [];
     public bool HasItems => Items.Count > 0;
@@ -273,6 +280,8 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
+        OnPropertyChanged(nameof(FixerName));
+        OnPropertyChanged(nameof(FixButtonText));
         if (_fixer is null)
         {
             (FixerStatusText, Tone, IsFixerReady) = ("No AI fixer is configured.", StatusTone.Warning, false);
@@ -325,8 +334,8 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
             {
                 cts.Token.ThrowIfCancellationRequested();
                 ProgressText = batch.Length == 1
-                    ? "Asking Claude… this usually takes 20–90 seconds."
-                    : string.Create(CultureInfo.InvariantCulture, $"Asking Claude about finding {done + 1} of {batch.Length}…");
+                    ? $"Asking {_fixer?.ShortName ?? "the AI"}… this can take from 20 seconds to a few minutes."
+                    : string.Create(CultureInfo.InvariantCulture, $"Asking {_fixer?.ShortName ?? "the AI"} about finding {done + 1} of {batch.Length}…");
                 await ProposeAsync(scope, item, cts.Token).ConfigureAwait(true);
                 done++;
             }
@@ -354,7 +363,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         var finding = item.Finding;
         item.Proposal = null;
         item.Patch = null;
-        if (!FixRequestBuilder.TryBuild(scope, finding, _findings.AllFindings, out var request, out var error))
+        if (!FixRequestBuilder.TryBuild(scope, finding, _findings.AllFindings, out var request, out var error, _fixer?.Limits))
         {
             item.State = FixState.CannotFix;
             item.Message = error;
@@ -385,13 +394,13 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         {
             case FixVerdict.FalsePositive:
                 item.State = FixState.FalsePositive;
-                item.Message = "Claude thinks this is a false positive. Confirm to record it in the Second Brain, or ignore the suggestion.";
+                item.Message = Who + " thinks this is a false positive. Confirm to record it in the Second Brain, or ignore the suggestion.";
                 break;
             case FixVerdict.CannotFix:
                 item.State = FixState.CannotFix;
                 item.Message = proposal.FollowUpCommand is not null
                     ? "No file change is needed here." + runIt
-                    : "Claude could not fix this inside the file; see the explanation.";
+                    : Who + " could not fix this inside the file; see the explanation.";
                 break;
             default:
                 if (!SourceFile.TryRead(scope, request.EditPath, out var file, out error))
@@ -406,7 +415,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
                 item.Message = patch.Succeeded
                     ? "Review the change below, then Apply. A backup is kept and Undo restores it." +
                       (proposal.FollowUpCommand is not null ? " After applying:" + runIt : string.Empty)
-                    : "Claude's edits did not match the file: " + string.Join(" ", patch.Errors) + " Try again.";
+                    : Who + "'s edits did not match the file: " + string.Join(" ", patch.Errors) + " Try again.";
                 break;
         }
         await RememberAsync(finding, proposal, item.Patch, request.EditPath).ConfigureAwait(true);

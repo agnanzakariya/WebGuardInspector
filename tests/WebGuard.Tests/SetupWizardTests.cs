@@ -52,7 +52,7 @@ public static class SetupWizardTests
         wizard.Next();
         Assert.Equal(SetupStep.Summary, wizard.Step, "summary reached");
         Assert.Equal(AppTheme.Light, settings.Current.Theme, "theme saved");
-        Assert.True(wizard.Summary.Any(l => l.Label == "Claude fixing" && l.Value == "Off"), "summary lists the choices");
+        Assert.True(wizard.Summary.Any(l => l.Label == "AI fixing" && l.Value == "Off"), "summary lists the choices");
         Assert.True(!settings.Current.SetupCompleted, "not complete before Finish");
 
         wizard.Next();

@@ -39,6 +39,8 @@ public sealed class SetupWizardViewModel : ObservableObject
     public const string DontUse = "Don't use";
     public const string OnlineLookups = "Allow online lookups";
     public const string OfflineOnly = "Offline only";
+    public const string FixWithClaude = "Claude";
+    public const string FixWithLocalModel = "Local model";
 
     private readonly SettingsService _settings;
     private readonly IThemeService _theme;
@@ -83,7 +85,7 @@ public sealed class SetupWizardViewModel : ObservableObject
             new(SetupStep.Engines, "Security engines"),
             new(SetupStep.Privacy, "Privacy"),
             new(SetupStep.AiAnalyst, "Local AI"),
-            new(SetupStep.Claude, "Claude fixing"),
+            new(SetupStep.Claude, "AI fixing"),
             new(SetupStep.SecondBrain, "Second Brain"),
             new(SetupStep.Preferences, "Preferences"),
             new(SetupStep.Summary, "Finish"),
@@ -92,7 +94,7 @@ public sealed class SetupWizardViewModel : ObservableObject
         NextCommand = new RelayCommand(Next);
         RefreshEnginesCommand = new AsyncRelayCommand(() => EngineCatalog.RefreshAsync());
         TestAiCommand = new AsyncRelayCommand(TestAiAsync, () => _analyst is not null && AiChoice == UseIt, ex => AiResult = new(ex.Message, StatusTone.Danger));
-        CheckClaudeCommand = new AsyncRelayCommand(CheckClaudeAsync, () => _fixer is not null && ClaudeChoice == UseIt,
+        CheckClaudeCommand = new AsyncRelayCommand(CheckClaudeAsync, () => _fixer is not null && UsesFixing,
             ex => ClaudeResult = new(ex.Message, StatusTone.Danger));
         BrowseVaultCommand = new RelayCommand(() =>
         {
@@ -108,6 +110,7 @@ public sealed class SetupWizardViewModel : ObservableObject
     public EngineCatalogViewModel EngineCatalog { get; }
     public ObservableCollection<SetupStepItemViewModel> Steps { get; }
     public IReadOnlyList<string> FeatureChoices { get; } = [UseIt, DontUse];
+    public IReadOnlyList<string> FixChoices { get; } = [FixWithClaude, FixWithLocalModel, DontUse];
     public IReadOnlyList<string> IntelChoices { get; } = [OnlineLookups, OfflineOnly];
     public IReadOnlyList<string> ThemeChoices { get; } = [nameof(AppTheme.Dark), nameof(AppTheme.Light)];
     public IReadOnlyList<int> ParallelismOptions { get; } = [1, 2, 4, 8];
@@ -201,11 +204,15 @@ public sealed class SetupWizardViewModel : ObservableObject
         {
             if (!SetProperty(ref _claudeChoice, value)) return;
             OnPropertyChanged(nameof(UsesClaude));
+            OnPropertyChanged(nameof(UsesLocalFixing));
+            OnPropertyChanged(nameof(UsesFixing));
             CheckClaudeCommand.RaiseCanExecuteChanged();
         }
     }
 
-    public bool UsesClaude => ClaudeChoice == UseIt;
+    public bool UsesClaude => ClaudeChoice == FixWithClaude;
+    public bool UsesLocalFixing => ClaudeChoice == FixWithLocalModel;
+    public bool UsesFixing => UsesClaude || UsesLocalFixing;
     public string ClaudePath { get => _claudePath; set => SetProperty(ref _claudePath, value?.Trim().Trim('"') ?? string.Empty); }
     public string ClaudeModel { get => _claudeModel; set => SetProperty(ref _claudeModel, value?.Trim() ?? string.Empty); }
     public ToneText? ClaudeResult
@@ -252,7 +259,8 @@ public sealed class SetupWizardViewModel : ObservableObject
             : "Off · nothing leaves this PC"),
         new("Update check", CheckUpdates ? "Daily at start-up (GitHub Releases)" : "Manual only (Settings → Updates)"),
         new("Local AI analyst", UsesAi ? $"On · {AiEndpoint}{(AiModel.Length > 0 ? " · " + AiModel : string.Empty)}" : "Off"),
-        new("Claude fixing", UsesClaude ? "On" + (ClaudeModel.Length > 0 ? " · model " + ClaudeModel : string.Empty) : "Off"),
+        new("AI fixing", UsesClaude ? "Claude" + (ClaudeModel.Length > 0 ? " · model " + ClaudeModel : string.Empty)
+            : UsesLocalFixing ? "Local model at " + AiEndpoint : "Off"),
         new("Second Brain", UsesVault ? VaultPath + (AutoRecord ? " · records automatically" : " · manual") : "Off"),
         new("Preferences", $"{ThemeChoice} theme · {Parallelism} parallel reader(s) · {SplitExcluded().Length} excluded folder names"),
     ];
@@ -313,7 +321,9 @@ public sealed class SetupWizardViewModel : ObservableObject
         SetupStep.AiAnalyst when AiChoice is null => "Choose whether to use the local AI analyst.",
         SetupStep.AiAnalyst when UsesAi && !(Uri.TryCreate(AiEndpoint, UriKind.Absolute, out var uri) && uri.IsLoopback) =>
             "The AI endpoint must be a local URL such as " + AppSettings.DefaultAiEndpoint + ".",
-        SetupStep.Claude when ClaudeChoice is null => "Choose whether to use Claude for fixing.",
+        SetupStep.Claude when ClaudeChoice is null => "Choose who proposes fixes: Claude, the local model, or nobody.",
+        SetupStep.Claude when UsesLocalFixing && !(Uri.TryCreate(AiEndpoint, UriKind.Absolute, out var fixUri) && fixUri.IsLoopback) =>
+            "The local model uses the AI endpoint of the previous step, which must be a local URL such as " + AppSettings.DefaultAiEndpoint + ".",
         SetupStep.Claude when UsesClaude && ClaudePath.Length > 0 &&
                               !(Path.IsPathFullyQualified(ClaudePath) && File.Exists(ClaudePath) && ClaudePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) =>
             "The path to claude.exe must be an existing .exe, or leave it empty to detect it automatically.",
@@ -347,7 +357,10 @@ public sealed class SetupWizardViewModel : ObservableObject
             case SetupStep.Claude:
                 _settings.Update(s => s with
                 {
-                    ClaudeFixEnabled = UsesClaude,
+                    ClaudeFixEnabled = UsesFixing,
+                    FixProvider = UsesLocalFixing ? FixProvider.LocalModel : FixProvider.Claude,
+                    AiEndpoint = UsesLocalFixing ? AiEndpoint : s.AiEndpoint,
+                    AiModel = UsesLocalFixing ? (AiModel.Length == 0 ? null : AiModel) : s.AiModel,
                     ClaudeCliPath = ClaudePath.Length == 0 ? null : ClaudePath,
                     ClaudeModel = ClaudeModel.Length == 0 ? null : ClaudeModel,
                 });

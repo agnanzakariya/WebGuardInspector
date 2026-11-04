@@ -47,7 +47,7 @@
         </Grid.ColumnDefinitions>
         <TextBlock Style="{StaticResource Icon.Tone}" VerticalAlignment="Top" Margin="0,2,10,0"/>
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-          <TextBlock Text="Claude Code" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding FixerName}" Style="{StaticResource Text.Base}" FontWeight="SemiBold"/>
           <TextBlock Text="{Binding FixerStatusText}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextTrimming="None" Margin="0,2,0,0"/>
           <ProgressBar IsIndeterminate="True" Height="4" Margin="0,8,0,0" Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}"/>
           <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0"
@@ -56,13 +56,13 @@
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
           <Button Style="{StaticResource Button.Secondary}" Command="{Binding RefreshStatusCommand}" Padding="10,6" Margin="0,0,8,0"
-                  ToolTip="Check Claude Code again (e.g. after signing in)">
+                  ToolTip="Check the AI fixer again (e.g. after signing in to Claude or starting LM Studio)">
             <TextBlock Text="&#xE72C;" Style="{StaticResource Text.Icon}" FontSize="12"/>
           </Button>
           <Button Style="{StaticResource Button.Secondary}" Content="Cancel" Command="{Binding CancelCommand}" Padding="12,6" Margin="0,0,8,0"
                   Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}"/>
           <Button Style="{StaticResource Button.Primary}" Command="{Binding FixAllCommand}" Padding="14,6"
-                  ToolTip="Ask Claude about every finding that is not answered yet and not closed (False positive, Accepted risk, Fixed). Nothing is written until you Apply.">
+                  ToolTip="Ask the AI about every finding that is not answered yet and not closed (False positive, Accepted risk, Fixed). Nothing is written until you Apply.">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="&#xE90F;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
               <TextBlock Text="Fix all open findings" Margin="6,0,0,0" FontSize="12"/>
@@ -145,10 +145,10 @@
             <!-- Page-level commands act on the selected item. -->
             <WrapPanel DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
               <Button Style="{StaticResource Button.Primary}" Command="{Binding FixSelectedCommand}" Padding="12,6" Margin="0,0,8,6"
-                      ToolTip="Ask Claude to fix this finding. Only the redacted file is sent; nothing is changed until you Apply.">
+                      ToolTip="Ask the AI chosen in Settings to fix this finding. Only the redacted file (or an excerpt) is sent; nothing is changed until you Apply.">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
-                  <TextBlock Text="Fix with Claude" Margin="6,0,0,0" FontSize="12"/>
+                  <TextBlock Text="{Binding FixButtonText}" Margin="6,0,0,0" FontSize="12"/>
                 </StackPanel>
               </Button>
               <Button Style="{StaticResource Button.Primary}" Command="{Binding ApplyCommand}" Padding="12,6" Margin="0,0,8,6"
@@ -184,7 +184,7 @@
                 <TextBlock Text="AI proposal — review it like a pull request from someone you do not know. Nothing is written until you click Apply."
                            Style="{StaticResource Text.Base}" Foreground="{DynamicResource Brush.Warning}" TextWrapping="Wrap"/>
               </Border>
-              <TextBlock Text="CLAUDE'S EXPLANATION" Style="{StaticResource Text.Label}" Margin="0,12,0,4"/>
+              <TextBlock Text="AI EXPLANATION" Style="{StaticResource Text.Label}" Margin="0,12,0,4"/>
               <TextBlock Text="{Binding Explanation}" Style="{StaticResource Text.Wrap}"/>
               <TextBlock Text="{Binding EditPathText}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
                          Visibility="{Binding EditsOtherFile, Converter={StaticResource BoolToVisibility}}"/>
@@ -236,7 +236,7 @@
         </ScrollViewer>
         <StackPanel VerticalAlignment="Center" Visibility="{Binding HasSelectedItem, Converter={StaticResource InverseBoolToVisibility}}">
           <TextBlock Text="Fix Proposal" Style="{StaticResource Text.Section}" HorizontalAlignment="Center"/>
-          <TextBlock Text="Select a finding, then ask Claude for a fix. You review the change as a diff before anything is written."
+          <TextBlock Text="Select a finding, then ask the AI for a fix. You review the change as a diff before anything is written."
                      Style="{StaticResource Text.Wrap}" TextAlignment="Center" Margin="0,6,0,0"/>
         </StackPanel>
       </Grid>

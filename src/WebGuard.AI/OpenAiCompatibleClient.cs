@@ -34,10 +34,11 @@ public sealed class OpenAiCompatibleClient(HttpClient http)
     /// Asks for <c>reasoning_effort: "none"</c>: reasoning models (Qwen3.x, gpt-oss) otherwise spend the whole token budget
     /// "thinking" on CPU and return no answer. LM Studio honours it; servers that reject the field are retried without it.
     /// </remarks>
-    public async Task<string> CompleteAsync(Uri endpoint, string model, IReadOnlyList<ChatMessage> messages, CancellationToken cancellationToken)
+    public async Task<string> CompleteAsync(Uri endpoint, string model, IReadOnlyList<ChatMessage> messages, CancellationToken cancellationToken,
+        int maxTokens = 1200)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        var request = new ChatRequest(model, messages, Temperature: 0.2, MaxTokens: 1200, Stream: false, ReasoningEffort: "none");
+        var request = new ChatRequest(model, messages, Temperature: 0.2, MaxTokens: maxTokens, Stream: false, ReasoningEffort: "none");
         var (status, body) = await PostAsync(endpoint, request, cancellationToken).ConfigureAwait(false);
         if (status == 400 && body.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
             (status, body) = await PostAsync(endpoint, request with { ReasoningEffort = null }, cancellationToken).ConfigureAwait(false);

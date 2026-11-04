@@ -101,7 +101,7 @@
                     <TextBlock Style="{StaticResource Text.Wrap}" Text="• Which security engines are ready (bundled ones work right away)"/>
                     <TextBlock Style="{StaticResource Text.Wrap}" Text="• Online threat intelligence (OSV.dev, CISA KEV, abuse.ch) — or offline only"/>
                     <TextBlock Style="{StaticResource Text.Wrap}" Text="• A local AI analyst (LM Studio / Ollama)"/>
-                    <TextBlock Style="{StaticResource Text.Wrap}" Text="• Fixing with Claude (Claude Code CLI, your own Claude login)"/>
+                    <TextBlock Style="{StaticResource Text.Wrap}" Text="• AI fixing: Claude (Claude Code CLI, your own Claude login) or the local model"/>
                     <TextBlock Style="{StaticResource Text.Wrap}" Text="• A Second Brain vault in Obsidian"/>
                     <TextBlock Style="{StaticResource Text.Wrap}" Text="• Theme and scanning preferences"/>
                   </StackPanel>
@@ -162,13 +162,13 @@
                 </StackPanel>
               </StackPanel>
 
-              <!-- 5 Claude -->
+              <!-- 5 AI fixing -->
               <StackPanel Visibility="{Binding IsClaude, Converter={StaticResource BoolToVisibility}}" MaxWidth="680" HorizontalAlignment="Left">
                 <TextBlock Style="{StaticResource Text.Wrap}"
-                           Text="The Fixing page asks Claude (Claude Code CLI, under your own Claude subscription) to propose code changes. Only the redacted file of a finding is sent to Anthropic; you review every change before it is written."/>
-                <TextBlock Text="Fixing with Claude" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
-                <ListBox Style="{StaticResource ChoiceList}" ItemsSource="{Binding FeatureChoices}" SelectedItem="{Binding ClaudeChoice, Mode=TwoWay}"
-                         AutomationProperties.Name="Claude choice"/>
+                           Text="The Fixing page asks an AI to propose code changes for findings; you review every change as a diff before it is written. Choose Claude (Claude Code CLI with your Claude subscription; the redacted file is sent to Anthropic) or the local model of the previous step (nothing leaves this PC; smaller files and excerpts, and results depend on the model)."/>
+                <TextBlock Text="Who proposes fixes" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
+                <ListBox Style="{StaticResource ChoiceList}" ItemsSource="{Binding FixChoices}" SelectedItem="{Binding ClaudeChoice, Mode=TwoWay}"
+                         AutomationProperties.Name="Fixing provider"/>
                 <StackPanel Visibility="{Binding UsesClaude, Converter={StaticResource BoolToVisibility}}">
                   <Border Style="{StaticResource Inset}">
                     <TextBlock Style="{StaticResource Text.Wrap}"
@@ -180,7 +180,14 @@
                   <TextBlock Text="Model (empty = Claude Code default; e.g. sonnet, opus)" Style="{StaticResource FieldLabel}"/>
                   <TextBox Text="{Binding ClaudeModel, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}" Tag="default"
                            AutomationProperties.Name="Claude model"/>
-                  <Button Style="{StaticResource Button.Secondary}" Content="Check Claude Code" Command="{Binding CheckClaudeCommand}" Padding="12,5" Margin="0,12,0,0"
+                </StackPanel>
+                <Border Style="{StaticResource Inset}" Visibility="{Binding UsesLocalFixing, Converter={StaticResource BoolToVisibility}}">
+                  <TextBlock Style="{StaticResource Text.Wrap}">
+                    <Run Text="Uses the AI endpoint "/><Run Text="{Binding AiEndpoint, Mode=OneWay}" FontFamily="{StaticResource Font.Code}"/><Run Text=" and its model. Start the LM Studio server with a chat model loaded, then press Check."/>
+                  </TextBlock>
+                </Border>
+                <StackPanel Visibility="{Binding UsesFixing, Converter={StaticResource BoolToVisibility}}">
+                  <Button Style="{StaticResource Button.Secondary}" Content="Check" Command="{Binding CheckClaudeCommand}" Padding="12,5" Margin="0,12,0,0"
                           HorizontalAlignment="Left"/>
                   <Border Style="{StaticResource StatusBox}" DataContext="{Binding ClaudeResult}"
                           Visibility="{Binding DataContext.HasClaudeResult, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">

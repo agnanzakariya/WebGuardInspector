@@ -15,6 +15,21 @@ public enum FixVerdict { Fix, FalsePositive, CannotFix }
 /// </summary>
 public sealed record CodeEdit(string OldText, string NewText);
 
+/// <summary>
+/// How much text a fixer can take: whole files up to <see cref="MaxContentChars"/>, else an excerpt of
+/// <see cref="ExcerptRadius"/> lines around the finding up to <see cref="MaxExcerptChars"/>. Local models have small
+/// context windows, so they get smaller limits than Claude.
+/// </summary>
+public sealed record FixLimits(int MaxContentChars, int ExcerptRadius, int MaxExcerptChars)
+{
+    public static FixLimits Claude { get; } = new(200_000, 200, 60_000);
+
+    /// <summary>
+    /// About 3.5k tokens of file text, so prompt, file and answer fit LM Studio's default 8,192-token context window.
+    /// </summary>
+    public static FixLimits LocalModel { get; } = new(12_000, 40, 8_000);
+}
+
 /// <summary>Lines of a large file sent to the model instead of the whole file (1-based, inclusive).</summary>
 public sealed record FileExcerpt(int FirstLine, int LastLine, int TotalLines);
 
@@ -38,13 +53,10 @@ public sealed record FixRequest(
 
 public static class FixRequestBuilder
 {
-    /// <summary>Upper bound on the redacted text sent to the model; larger files are sent as an excerpt.</summary>
+    /// <summary>Claude's limit on the redacted text sent whole; larger files are sent as an excerpt.</summary>
     public const int MaxContentChars = 200_000;
 
-    /// <summary>Lines sent above and below the reported lines of a large file.</summary>
-    public const int ExcerptRadius = 200;
-
-    /// <summary>Upper bound on an excerpt (long minified lines make a few hundred lines large).</summary>
+    /// <summary>Claude's upper bound on an excerpt (long minified lines make a few hundred lines large).</summary>
     public const int MaxExcerptChars = 60_000;
 
     /// <summary>
@@ -54,8 +66,9 @@ public static class FixRequestBuilder
     /// patched (binary, not UTF-8, or too large with no line to excerpt), so they are reported without asking the model.
     /// </summary>
     public static bool TryBuild(ProjectScope scope, SecurityFinding finding, IEnumerable<SecurityFinding> allFindings,
-        out FixRequest request, out string error)
+        out FixRequest request, out string error, FixLimits? limits = null)
     {
+        limits ??= FixLimits.Claude;
         ArgumentNullException.ThrowIfNull(finding);
         ArgumentNullException.ThrowIfNull(allFindings);
         request = null!;
@@ -67,7 +80,7 @@ public static class FixRequestBuilder
             if (SourceFile.TryRead(scope, plan.ManifestPath, out var manifestFile, out _))
             {
                 manifest = SourceRedactor.Redact(manifestFile.Text, manifestFile.FullPath);
-                if (manifest.Length > MaxContentChars) manifest = string.Empty;
+                if (manifest.Length > limits.MaxContentChars) manifest = string.Empty;
             }
             request = new FixRequest(finding, manifest, [], plan.ManifestPath, null, plan);
             error = string.Empty;
@@ -80,7 +93,7 @@ public static class FixRequestBuilder
             .Take(20)
             .ToArray();
         var redacted = SourceRedactor.Redact(file.Text, file.FullPath);
-        if (redacted.Length <= MaxContentChars)
+        if (redacted.Length <= limits.MaxContentChars)
         {
             request = new FixRequest(finding, redacted, others);
             return true;
@@ -88,22 +101,22 @@ public static class FixRequestBuilder
 
         if (finding.Location.StartLine <= 0)
         {
-            error = $"The file has {redacted.Length:N0} characters (limit {MaxContentChars:N0}) and the finding has no line number to cut an excerpt around.";
+            error = $"The file has {redacted.Length:N0} characters (limit {limits.MaxContentChars:N0} for this AI) and the finding has no line number to cut an excerpt around.";
             return false;
         }
         var lines = file.Text.Split('\n');
         var start = Math.Min(finding.Location.StartLine, lines.Length);
         var end = Math.Min(Math.Max(start, finding.Location.EndLine), lines.Length);
-        for (var radius = ExcerptRadius; radius >= 10; radius /= 2)
+        for (var radius = limits.ExcerptRadius; radius >= 10; radius /= 2)
         {
             var first = Math.Max(1, start - radius);
             var last = Math.Min(lines.Length, end + radius);
             var excerpt = SourceRedactor.Redact(string.Join('\n', lines[(first - 1)..last]), file.FullPath);
-            if (excerpt.Length > MaxExcerptChars) continue;
+            if (excerpt.Length > limits.MaxExcerptChars) continue;
             request = new FixRequest(finding, excerpt, others, null, new FileExcerpt(first, last, lines.Length));
             return true;
         }
-        error = $"The lines around the finding are longer than {MaxExcerptChars:N0} characters (minified code?); fix this file by hand.";
+        error = $"The lines around the finding are longer than {limits.MaxExcerptChars:N0} characters (minified code?); fix this file by hand.";
         return false;
     }
 }
@@ -125,6 +138,13 @@ public sealed record FixProposal(
 public interface ICodeFixer
 {
     string DisplayName { get; }
+
+    /// <summary>Short name for sentences such as "Ask Claude…" / "Ask the local model…".</summary>
+    string ShortName => DisplayName;
+
+    /// <summary>Size limits of what this fixer is sent.</summary>
+    FixLimits Limits => FixLimits.Claude;
+
     Task<EngineStatus> GetStatusAsync(CancellationToken cancellationToken);
     Task<FixProposal> ProposeAsync(FixRequest request, CancellationToken cancellationToken);
 }

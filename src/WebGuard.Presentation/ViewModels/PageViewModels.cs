@@ -674,6 +674,7 @@ public sealed class SettingsViewModel : PageViewModel
     private readonly IFolderPicker? _folderPicker;
     private string _saveMessage = string.Empty;
     private bool _claudeFixEnabled;
+    private FixProvider _fixProvider;
     private string _claudeCliPath = string.Empty;
     private string _claudeModel = string.Empty;
 
@@ -752,6 +753,25 @@ public sealed class SettingsViewModel : PageViewModel
     public bool AutoRecord { get => _autoRecord; set => SetProperty(ref _autoRecord, value); }
     public ICommand BrowseVaultCommand { get; }
     public bool ClaudeFixEnabled { get => _claudeFixEnabled; set => SetProperty(ref _claudeFixEnabled, value); }
+
+    public const string ClaudeProviderChoice = "Claude (Claude Code CLI)";
+    public const string LocalProviderChoice = "Local model (LM Studio / Ollama)";
+    public IReadOnlyList<string> FixProviderChoices { get; } = [ClaudeProviderChoice, LocalProviderChoice];
+
+    public string FixProviderChoice
+    {
+        get => _fixProvider == FixProvider.LocalModel ? LocalProviderChoice : ClaudeProviderChoice;
+        set
+        {
+            var provider = value == LocalProviderChoice ? FixProvider.LocalModel : FixProvider.Claude;
+            if (!SetProperty(ref _fixProvider, provider, nameof(FixProviderChoice))) return;
+            OnPropertyChanged(nameof(UsesClaudeForFixing));
+            OnPropertyChanged(nameof(UsesLocalModelForFixing));
+        }
+    }
+
+    public bool UsesClaudeForFixing => _fixProvider == FixProvider.Claude;
+    public bool UsesLocalModelForFixing => _fixProvider == FixProvider.LocalModel;
     public string ClaudeCliPath { get => _claudeCliPath; set => SetProperty(ref _claudeCliPath, value?.Trim().Trim('"') ?? string.Empty); }
     public string ClaudeModel { get => _claudeModel; set => SetProperty(ref _claudeModel, value?.Trim() ?? string.Empty); }
 
@@ -824,6 +844,7 @@ public sealed class SettingsViewModel : PageViewModel
             SecondBrainVaultPath = VaultPath.Length == 0 ? null : VaultPath,
             SecondBrainAutoRecord = AutoRecord,
             ClaudeFixEnabled = ClaudeFixEnabled,
+            FixProvider = _fixProvider,
             ClaudeCliPath = ClaudeCliPath.Length == 0 ? null : ClaudeCliPath,
             ClaudeModel = ClaudeModel.Length == 0 ? null : ClaudeModel,
             EngineExecutables = EngineSettings.Where(e => e.ExecutablePath.Length > 0)
@@ -847,6 +868,7 @@ public sealed class SettingsViewModel : PageViewModel
         AiModel = string.Empty;
         AutoRecord = defaults.SecondBrainAutoRecord;
         ClaudeFixEnabled = defaults.ClaudeFixEnabled;
+        FixProviderChoice = ClaudeProviderChoice;
         ClaudeCliPath = string.Empty;
         ClaudeModel = string.Empty;
         foreach (var engine in EngineSettings)
@@ -870,6 +892,7 @@ public sealed class SettingsViewModel : PageViewModel
         VaultPath = s.SecondBrainVaultPath ?? string.Empty;
         AutoRecord = s.SecondBrainAutoRecord;
         ClaudeFixEnabled = s.ClaudeFixEnabled;
+        FixProviderChoice = s.FixProvider == FixProvider.LocalModel ? LocalProviderChoice : ClaudeProviderChoice;
         ClaudeCliPath = s.ClaudeCliPath ?? string.Empty;
         ClaudeModel = s.ClaudeModel ?? string.Empty;
         EngineSettings.Clear();
