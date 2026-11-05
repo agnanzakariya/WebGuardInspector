@@ -28,6 +28,8 @@ diff-nya, lalu Apply dengan backup dan Undo. Temuan yang dinilai false positive 
 
 *Proyek demo fiktif (`demo-shop`) dengan celah PHP yang disengaja.*
 
+Alur proses bisnis lengkap (flowchart, tahapan, aturan, peran): [docs/business-process.md](docs/business-process.md).
+
 ## Fitur
 
 | Fitur | Status |
