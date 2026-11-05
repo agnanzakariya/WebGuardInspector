@@ -372,6 +372,12 @@ Lalu buka halaman **Fixing** (di bawah Findings) setelah scan: **Fix with Claude
 - Output AI selalu ditandai sebagai hipotesis sampai divalidasi manusia; AI hanya memakai model lokal.
 - Server MCP read-only secara default, dibatasi ke satu folder, dan diaudit.
 
+## Lisensi
+
+Azura WebGuard Inspector dirilis di bawah [lisensi MIT](LICENSE). Tool pihak ketiga yang dibundel memakai lisensinya
+masing-masing: Gitleaks (MIT), OSV-Scanner (Apache-2.0) dan YARA-X (BSD-3-Clause), lihat `installer/licenses/`.
+ClamAV (GPL-2.0), Semgrep, Claude Code, Obsidian dan LM Studio tidak dibundel; dipasang terpisah sesuai lisensinya.
+
 ## Changelog
 
 **1.0.0** — Rilis produksi pertama. Second Brain lebih dulu: scan ulang hanya mengirim file yang berubah ke engine (cache per folder, `IIncrementalSecurityEngine`, `FileScanResultCacheStore`); engine *Second Brain memory* untuk file identik yang sudah dikonfirmasi berbahaya; keputusan berlaku untuk file identik di proyek lain; fix yang pernah diterapkan dan analisis AI lama dipakai ulang; keputusan serupa disertakan di prompt AI. Diuji dengan engine asli: scan ulang tanpa perubahan 26,7 s → 3,9 s. 100 tests.
