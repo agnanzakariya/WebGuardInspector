@@ -360,6 +360,8 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         catch (OperationCanceledException)
         {
             Message = string.Create(CultureInfo.InvariantCulture, $"Canceled after {done} of {batch.Length}.");
+            await _findings.RecordAsync(SessionActivityKind.FixProposed,
+                string.Create(CultureInfo.InvariantCulture, $"Fixing canceled after {done} of {batch.Length} finding(s)")).ConfigureAwait(true);
         }
         finally
         {
@@ -380,6 +382,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         {
             item.State = FixState.CannotFix;
             item.Message = error;
+            await RecordProposalAsync(item).ConfigureAwait(true);
             return;
         }
 
@@ -391,7 +394,11 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         var memory = await KnowledgeLookup.MemoryAsync(_secondBrain, _settings, cancellationToken).ConfigureAwait(true);
         if (memory is not null)
         {
-            if (!askModel && await TryRememberedFixAsync(memory, scope, item, request, cancellationToken).ConfigureAwait(true)) return;
+            if (!askModel && await TryRememberedFixAsync(memory, scope, item, request, cancellationToken).ConfigureAwait(true))
+            {
+                await RecordProposalAsync(item).ConfigureAwait(true);
+                return;
+            }
             request = request with { PriorKnowledge = await KnowledgeLookup.PriorKnowledgeAsync(_secondBrain!, finding, cancellationToken).ConfigureAwait(true) };
         }
 
@@ -404,6 +411,7 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         {
             item.State = FixState.Failed;
             item.Message = ex.Message;
+            await RecordProposalAsync(item).ConfigureAwait(true);
             return;
         }
 
@@ -441,7 +449,36 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
                 break;
         }
         await RememberAsync(finding, proposal, item.Patch, request.EditPath).ConfigureAwait(true);
+        await RecordProposalAsync(item).ConfigureAwait(true);
     }
+
+    /// <summary>Scan History: what the fixer answered for this finding.</summary>
+    private Task RecordProposalAsync(FixItemViewModel item)
+    {
+        var outcome = item.State switch
+        {
+            FixState.Proposed => item.FromSecondBrain ? "Fix reused from the Second Brain" : "Fix proposed",
+            FixState.FalsePositive => "Likely false positive",
+            FixState.CannotFix => "Needs manual action",
+            _ => "Fix request failed",
+        };
+        var by = item.Proposal?.Model ?? _fixer?.ShortName ?? "AI";
+        var detail = item.Patch is { Succeeded: true } p
+            ? string.Create(CultureInfo.InvariantCulture, $"+{p.AddedLines} −{p.RemovedLines} in {item.EditPath}; {item.Proposal?.Confidence} confidence")
+            : item.Proposal is { } proposal ? $"{proposal.Confidence} confidence" : null;
+        ActivitySection?[] sections =
+        [
+            SessionActivityLog.Section("Explanation", item.Proposal?.Explanation),
+            SessionActivityLog.Section("Result", item.Message),
+            SessionActivityLog.Section("Proposed change", Diff(item), ActivitySectionStyle.Diff),
+            SessionActivityLog.Section("Command to run (not run by Azura)", item.Proposal?.FollowUpCommand, ActivitySectionStyle.Code),
+        ];
+        return _findings.RecordAsync(SessionActivityKind.FixProposed, $"{outcome} ({by}): {item.Finding.Title}", item.Finding, detail, sections, item.EditPath);
+    }
+
+    /// <summary>Unified diff of the item's patch (empty when there is none).</summary>
+    private static string? Diff(FixItemViewModel item) =>
+        item.Patch is { Succeeded: true } patch ? FixPatcher.ToUnifiedText(item.EditPath, patch.Hunks) : null;
 
     /// <summary>
     /// Tries the fixes a person applied before for this rule (newest first). The first whose edits all match this file
@@ -503,6 +540,16 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
                            ? "Now run the command below to regenerate the lockfile, then scan again."
                            : "Scan again to confirm the finding is gone.");
         await RememberAppliedFixAsync(finding, proposal, report).ConfigureAwait(true);
+        await _findings.RecordAsync(SessionActivityKind.FixApplied,
+            string.Create(CultureInfo.InvariantCulture, $"Fix applied to {item.EditPath} (+{patch.AddedLines} −{patch.RemovedLines}): {finding.Title}"), finding,
+            $"Proposed by {proposal.Model}",
+            [
+                SessionActivityLog.Section("Remediation", proposal.Explanation),
+                SessionActivityLog.Section("Applied change", Diff(item), ActivitySectionStyle.Diff),
+                SessionActivityLog.Section("Backup of the original (outside the project)", fix.BackupPath, ActivitySectionStyle.Code),
+                SessionActivityLog.Section("Old version, commented out (not scanned)", wreck, ActivitySectionStyle.Code),
+                SessionActivityLog.Section("Command to run next (not run by Azura)", proposal.FollowUpCommand, ActivitySectionStyle.Code),
+            ], item.EditPath).ConfigureAwait(true);
         await _findings.SetStatusAsync(item.Finding, ValidationStatus.Fixed,
             $"Fix proposed by {proposal.Model} and applied after review. Old version: {wreck}. Backup: {fix.BackupPath}").ConfigureAwait(true);
         RaiseCommands();
@@ -515,6 +562,8 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
         item.Applied = null;
         item.State = FixState.Proposed;
         item.Message = "Undone; the original file is back and its wreck copy was removed. The proposal can be applied again.";
+        await _findings.RecordAsync(SessionActivityKind.FixUndone, $"Fix undone in {item.EditPath}: {item.Finding.Title}", item.Finding,
+            "Original file restored from the backup.").ConfigureAwait(true);
         await _findings.SetStatusAsync(item.Finding, ValidationStatus.NeedsReview, "AI fix undone.").ConfigureAwait(true);
         RaiseCommands();
     }

@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v1.0.1
+# Azura — WebGuard Inspector v1.1.0
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -379,6 +379,8 @@ masing-masing: Gitleaks (MIT), OSV-Scanner (Apache-2.0) dan YARA-X (BSD-3-Clause
 ClamAV (GPL-2.0), Semgrep, Claude Code, Obsidian dan LM Studio tidak dibundel; dipasang terpisah sesuai lisensinya.
 
 ## Changelog
+
+**1.1.0** — Scan History permanen: setiap sesi scan dan fixing disimpan di `%LOCALAPPDATA%\WebGuardInspector\history` (bertahan setelah restart, maks. 200 sesi) beserta aktivitasnya (scan, verdict, analisis AI, usulan fix, Apply, Undo, export). Klik sebuah sesi untuk resume: angka per severity, status temuan, jumlah aktivitas dan linimasa. Setiap kegiatan dicatat lengkap: analisis AI (ringkasan, alasan risiko, usulan remediation; juga yang diambil dari Second Brain, gagal atau dibatalkan), usulan fix (penjelasan, diff, perintah lanjutan) dan fix yang diterapkan (remediation, diff, lokasi backup dan salinan wreck); di linimasa lewat *Show details*. Export laporan **PDF** (tanpa dependency: sesi, ringkasan, engine, temuan, linimasa, lalu bagian *AI analyses and remediation* dengan teks lengkap dan diff berwarna; secret diredaksi) atau JSON. 104 tests.
 
 **1.0.1** — Settings → Components: komponen yang dipasang lewat winget hanya ditawari update bila katalog winget sudah memuat versi baru (rilis GitHub biasanya lebih dulu); jawaban winget "tidak ada versi baru" ditampilkan sebagai info, bukan error. 101 tests.
 

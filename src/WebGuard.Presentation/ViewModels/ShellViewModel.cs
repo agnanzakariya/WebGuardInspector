@@ -181,7 +181,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             Page<AiAnalystViewModel>().RefreshAsync(),
             Page<FixingViewModel>().RefreshAsync(),
             Page<SecondBrainViewModel>().RefreshAsync(),
-            Page<IntelligenceViewModel>().RefreshAsync()).ConfigureAwait(true);
+            Page<IntelligenceViewModel>().RefreshAsync(),
+            Page<ScanHistoryViewModel>().RefreshAsync()).ConfigureAwait(true);
         if (About is not null)
         {
             await About.RefreshComponentsAsync().ConfigureAwait(true);

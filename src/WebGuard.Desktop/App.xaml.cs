@@ -81,7 +81,8 @@ public partial class App : Application
         var dialogs = new DialogService();
         var launcher = new ExternalLauncher(dialogs);
         var folderPicker = new FolderPicker();
-        var history = new InMemoryScanHistoryStore();
+        var history = new JsonScanHistoryStore(JsonScanHistoryStore.DefaultDirectory);
+        var activityLog = new SessionActivityLog(history);
 
         var workspace = new ScanWorkspaceViewModel(
             new LocalFolderScanner(engines, enrichers, resultCache: new FileScanResultCacheStore(FileScanResultCacheStore.DefaultDirectory)),
@@ -95,7 +96,7 @@ public partial class App : Application
             secondBrain);
 
         var catalog = new EngineCatalogViewModel(engines);
-        var findings = new FindingsViewModel(catalog, analyst, secondBrain, settings, launcher);
+        var findings = new FindingsViewModel(catalog, analyst, secondBrain, settings, launcher, activityLog);
         var claudeFixer = new ClaudeCodeFixer(processRunner,
             () => new ClaudeCodeSettings(settings.Current.ClaudeFixEnabled, settings.Current.ClaudeCliPath, settings.Current.ClaudeModel),
             () => ExecutableLocator.Find(["claude"]));
@@ -139,7 +140,7 @@ public partial class App : Application
             new AiAnalystViewModel(analyst, mcp, workspace, clipboard),
             new SecondBrainViewModel(secondBrain, launcher),
             new IntelligenceViewModel(vulnerabilities, malware),
-            new ScanHistoryViewModel(history),
+            new ScanHistoryViewModel(history, activityLog, new SaveFileDialogService(), dialogs, launcher, new PdfReportExporter(), new JsonReportExporter()),
             new SettingsViewModel(settings, theme, catalog, folderPicker, about, components),
             catalog,
             settings,

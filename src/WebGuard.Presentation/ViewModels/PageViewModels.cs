@@ -71,8 +71,9 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
     private string _analysisMessage = string.Empty;
 
     public FindingsViewModel(EngineCatalogViewModel engines, IAiSecurityAnalyst? analyst = null, ISecondBrainRepository? secondBrain = null,
-        SettingsService? settings = null, IExternalLauncher? launcher = null)
+        SettingsService? settings = null, IExternalLauncher? launcher = null, SessionActivityLog? activityLog = null)
     {
+        ActivityLog = activityLog;
         EngineCatalog = engines;
         _analyst = analyst;
         _secondBrain = secondBrain;
@@ -88,6 +89,23 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
     }
 
     public AsyncRelayCommand AnalyzeCommand { get; }
+
+    /// <summary>Scan History record of this session's work (shared with the Fixing page).</summary>
+    internal SessionActivityLog? ActivityLog { get; }
+
+    internal Task RecordAsync(SessionActivityKind kind, string summary, SecurityFinding? finding = null, string? detail = null,
+        IEnumerable<ActivitySection?>? sections = null, string? fileName = null) =>
+        ActivityLog?.RecordAsync(_report, kind, summary, finding?.Location.ToString(), detail, finding?.Fingerprint, sections,
+            fileName ?? finding?.Location.RelativePath) ?? Task.CompletedTask;
+
+    /// <summary>The full text of an AI analysis, for Scan History and the PDF report.</summary>
+    private static ActivitySection?[] AnalysisSections(AiAnalysis analysis, string? source = null) =>
+    [
+        SessionActivityLog.Section("Source", source),
+        SessionActivityLog.Section("Summary", analysis.Summary),
+        SessionActivityLog.Section("Why it matters", analysis.WhyRisky),
+        SessionActivityLog.Section("Proposed remediation (AI hypothesis, review before applying)", analysis.ProposedRemediation, ActivitySectionStyle.Code),
+    ];
 
     /// <summary>Asks the model although an earlier analysis was found in the Second Brain.</summary>
     public AsyncRelayCommand ReanalyzeCommand { get; }
@@ -136,6 +154,7 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
             Rebuild(finding.Fingerprint);
             ValidationMessage = $"Marked {status} in the Second Brain.";
             StatusRecorded?.Invoke(this, finding with { Status = status });
+            await RecordAsync(SessionActivityKind.Verdict, $"Marked {status}: {finding.Title}", finding, note).ConfigureAwait(true);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -221,6 +240,10 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
             {
                 var same = earlier.Fingerprint == finding.Fingerprint;
                 _analyses[finding.Id] = new AiAnalysisViewModel(earlier.Analysis with { FindingId = finding.Id }, fromSecondBrain: true);
+                await RecordAsync(SessionActivityKind.AiAnalysis, $"AI analysis reused from the Second Brain ({earlier.Analysis.Model}): {finding.Title}", finding,
+                    $"{earlier.Analysis.Confidence} confidence; analysed {DisplayFormat.DateTime(earlier.Analysis.CreatedAtUtc)}",
+                    AnalysisSections(earlier.Analysis, same ? "Earlier analysis of this finding." : $"Earlier analysis of an identical file: {earlier.RelativePath}" +
+                                                       (earlier.Project is null ? "" : " in " + earlier.Project))).ConfigureAwait(true);
                 AnalysisMessage = (same ? "Shown from the Second Brain: this finding was analysed before" : $"Shown from the Second Brain: an identical file ({earlier.RelativePath}{(earlier.Project is null ? "" : " in " + earlier.Project)}) was analysed before") +
                                   "; the model was not asked. Use Ask AI again for a fresh analysis.";
                 return;
@@ -231,16 +254,21 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
             var context = FindingContextBuilder.Build(new ProjectScope(_report.RootFolder), finding, _all) with { PriorKnowledge = prior };
             var analysis = await _analyst.AnalyzeAsync(context, _analysisCts.Token).ConfigureAwait(true);
             _analyses[finding.Id] = new AiAnalysisViewModel(analysis);
+            await RecordAsync(SessionActivityKind.AiAnalysis, $"AI analysis ({analysis.Model}, {analysis.Confidence} confidence): {finding.Title}", finding,
+                prior is null ? null : "Earlier verdicts on similar findings were given to the model as hints.",
+                AnalysisSections(analysis)).ConfigureAwait(true);
             AnalysisMessage = (prior is null ? string.Empty : "Earlier verdicts on similar findings were given to the model as hints. ") +
                               await RememberAnalysisAsync(finding, analysis).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
             AnalysisMessage = "AI analysis canceled.";
+            await RecordAsync(SessionActivityKind.AiAnalysis, "AI analysis canceled: " + finding.Title, finding).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or System.Text.Json.JsonException)
         {
             AnalysisMessage = "AI analysis failed: " + ex.Message;
+            await RecordAsync(SessionActivityKind.AiAnalysis, "AI analysis failed: " + finding.Title, finding, ex.Message).ConfigureAwait(true);
         }
         finally
         {
@@ -665,28 +693,6 @@ public sealed class ScanHistoryRowViewModel(ScanReport report)
     public string SizeText => DisplayFormat.Bytes(Report.Statistics.TotalBytes);
     public string DurationText => DisplayFormat.Duration(Report.Duration);
     public string ScanIdShort => Report.ScanId.ToString("N", CultureInfo.InvariantCulture)[..8];
-}
-
-public sealed class ScanHistoryViewModel(IScanHistoryStore store) : PageViewModel
-{
-    private ScanHistoryRowViewModel? _selected;
-
-    public override PageKey Key => PageKey.ScanHistory;
-    public override string Title => "Scan History";
-    public override string Subtitle => "Sessions scanned during this run (persistent history arrives with the Second Brain)";
-    public ObservableCollection<ScanHistoryRowViewModel> Items { get; } = [];
-    public bool HasItems => Items.Count > 0;
-    public bool HasNoItems => Items.Count == 0;
-    public ScanHistoryRowViewModel? Selected { get => _selected; set => SetProperty(ref _selected, value); }
-
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        Items.Clear();
-        foreach (var r in await store.GetRecentAsync(50, cancellationToken).ConfigureAwait(true))
-            Items.Add(new ScanHistoryRowViewModel(r));
-        OnPropertyChanged(nameof(HasItems));
-        OnPropertyChanged(nameof(HasNoItems));
-    }
 }
 
 public sealed class SettingsViewModel : PageViewModel

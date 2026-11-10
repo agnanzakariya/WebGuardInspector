@@ -4,32 +4,164 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:WebGuard.Presentation.ViewModels;assembly=WebGuard.Presentation"
-             xmlns:controls="clr-namespace:WebGuard.Desktop.Views.Controls"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:ScanHistoryViewModel}">
-  <Border Style="{StaticResource Card}" Padding="0">
-    <Grid>
-      <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" Margin="6"
-                Visibility="{Binding HasItems, Converter={StaticResource BoolToVisibility}}">
-        <DataGrid.Columns>
-          <DataGridTextColumn Header="Started" Binding="{Binding StartedText}" Width="1.1*" ElementStyle="{StaticResource Cell.Text}"/>
-          <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="2.4*" ElementStyle="{StaticResource Cell.Secondary}"/>
-          <DataGridTextColumn Header="Files" Binding="{Binding FilesText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
-          <DataGridTextColumn Header="Hashed" Binding="{Binding HashedText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
-          <DataGridTextColumn Header="Errors" Binding="{Binding ErrorsText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
-          <DataGridTextColumn Header="Findings" Binding="{Binding FindingsText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
-          <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" Width="0.7*" ElementStyle="{StaticResource Cell.Secondary}"/>
-          <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="0.7*" ElementStyle="{StaticResource Cell.Secondary}"/>
-          <DataGridTextColumn Header="Scan ID" Binding="{Binding ScanIdShort}" Width="0.7*" ElementStyle="{StaticResource Cell.Code}"/>
-        </DataGrid.Columns>
-      </DataGrid>
-      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24"
-                  Visibility="{Binding HasNoItems, Converter={StaticResource BoolToVisibility}}">
-        <TextBlock Text="&#xE81C;" Style="{StaticResource Text.Icon}" FontSize="36" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}"/>
-        <TextBlock Text="No scans in this session" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" Margin="0,12,0,4"/>
-        <TextBlock Text="Completed scans are listed here so you can compare file counts between runs. Persistent history and regression tracking arrive with the Second Brain (Phase 4)."
-                   Style="{StaticResource Text.Wrap}" TextAlignment="Center" MaxWidth="460"/>
-      </StackPanel>
-    </Grid>
-  </Border>
+  <UserControl.Resources>
+    <Style x:Key="StatTile" TargetType="Border" BasedOn="{StaticResource Inset}">
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Padding" Value="12,8"/>
+    </Style>
+  </UserControl.Resources>
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <!-- Sessions -->
+    <Border Style="{StaticResource Card}" Padding="0">
+      <Grid>
+        <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" Margin="6" MaxHeight="230"
+                  Visibility="{Binding HasItems, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Scan sessions">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Started" Binding="{Binding StartedText}" Width="1.1*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="2.4*" ElementStyle="{StaticResource Cell.Secondary}"/>
+            <DataGridTextColumn Header="Files" Binding="{Binding FilesText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTextColumn Header="Findings" Binding="{Binding FindingsText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTextColumn Header="Errors" Binding="{Binding ErrorsText}" Width="0.6*" ElementStyle="{StaticResource Cell.Text}"/>
+            <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" Width="0.7*" ElementStyle="{StaticResource Cell.Secondary}"/>
+            <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="0.7*" ElementStyle="{StaticResource Cell.Secondary}"/>
+            <DataGridTextColumn Header="Scan ID" Binding="{Binding ScanIdShort}" Width="0.7*" ElementStyle="{StaticResource Cell.Code}"/>
+          </DataGrid.Columns>
+        </DataGrid>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24"
+                    Visibility="{Binding HasNoItems, Converter={StaticResource BoolToVisibility}}">
+          <TextBlock Text="&#xE81C;" Style="{StaticResource Text.Icon}" FontSize="36" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}"/>
+          <TextBlock Text="No scan sessions yet" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" Margin="0,12,0,4"/>
+          <TextBlock Text="Every scan is kept here with what you did afterwards: verdicts, AI analyses and fixes. Select a session for its résumé and export it as a PDF report."
+                     Style="{StaticResource Text.Wrap}" TextAlignment="Center" MaxWidth="460"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Résumé of the selected session -->
+    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,12,0,0" Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}">
+      <Grid DataContext="{Binding Detail}">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="SESSION RÉSUMÉ" Style="{StaticResource Text.Label}" VerticalAlignment="Center"/>
+              <Border Style="{StaticResource Pill.Tone}" Margin="10,0,0,0">
+                <TextBlock Text="{Binding ResultText}" Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold"/>
+              </Border>
+            </StackPanel>
+            <TextBlock Text="{Binding Folder}" Style="{StaticResource Text.Section}" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding WhenText}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                      DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+            <Button Style="{StaticResource Button.Secondary}" Command="{Binding ExportJsonCommand}" Padding="12,6" Margin="0,0,8,0" Content="Export JSON"
+                    ToolTip="The scan report as JSON (findings, engines, statistics)"/>
+            <Button Style="{StaticResource Button.Primary}" Command="{Binding ExportPdfCommand}" Padding="12,6"
+                    ToolTip="PDF report of this session: summary, engines, findings and every activity">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE749;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{DynamicResource Brush.OnPrimary}"/>
+                <TextBlock Text="Export PDF report" Margin="6,0,0,0" FontSize="12"/>
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <!-- Numbers -->
+        <WrapPanel Grid.Row="1" Margin="0,12,0,0">
+          <Border Style="{StaticResource StatTile}">
+            <StackPanel><TextBlock Text="{Binding FilesText}" Style="{StaticResource Text.Value}" FontSize="18"/><TextBlock Text="Files" Style="{StaticResource Text.Caption}"/></StackPanel>
+          </Border>
+          <Border Style="{StaticResource StatTile}">
+            <StackPanel><TextBlock Text="{Binding CriticalText}" Style="{StaticResource Text.Value}" FontSize="18" Foreground="{DynamicResource Brush.Severity.Critical}"/><TextBlock Text="Critical" Style="{StaticResource Text.Caption}"/></StackPanel>
+          </Border>
+          <Border Style="{StaticResource StatTile}">
+            <StackPanel><TextBlock Text="{Binding HighText}" Style="{StaticResource Text.Value}" FontSize="18" Foreground="{DynamicResource Brush.Severity.High}"/><TextBlock Text="High" Style="{StaticResource Text.Caption}"/></StackPanel>
+          </Border>
+          <Border Style="{StaticResource StatTile}">
+            <StackPanel><TextBlock Text="{Binding MediumText}" Style="{StaticResource Text.Value}" FontSize="18" Foreground="{DynamicResource Brush.Severity.Medium}"/><TextBlock Text="Medium" Style="{StaticResource Text.Caption}"/></StackPanel>
+          </Border>
+          <Border Style="{StaticResource StatTile}">
+            <StackPanel><TextBlock Text="{Binding LowText}" Style="{StaticResource Text.Value}" FontSize="18" Foreground="{DynamicResource Brush.Severity.Low}"/><TextBlock Text="Low / Info" Style="{StaticResource Text.Caption}"/></StackPanel>
+          </Border>
+        </WrapPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+          <TextBlock Text="{Binding EnginesText}" Style="{StaticResource Text.Wrap}" FontSize="12"/>
+          <TextBlock Text="{Binding StatusText}" Style="{StaticResource Text.Wrap}" FontSize="12" Margin="0,2,0,0"/>
+          <TextBlock Text="{Binding ActivityText}" Style="{StaticResource Text.Wrap}" FontSize="12" FontWeight="SemiBold" Margin="0,2,0,0"/>
+          <TextBlock Text="{Binding DataContext.Message, RelativeSource={RelativeSource AncestorType=UserControl}}" Style="{StaticResource Text.Wrap}"
+                     FontSize="12" Foreground="{DynamicResource Brush.Primary}" Margin="0,6,0,0"/>
+          <Button Style="{StaticResource Button.Link}" Content="Open the exported file" HorizontalAlignment="Left" Margin="0,2,0,0"
+                  Command="{Binding DataContext.OpenExportCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                  Visibility="{Binding DataContext.HasExport, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}"/>
+          <TextBlock Text="ACTIVITY TIMELINE" Style="{StaticResource Text.Label}" Margin="0,12,0,6"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+          <Grid>
+            <ItemsControl ItemsSource="{Binding Timeline}" Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Inset}" Margin="0,0,0,6" Padding="10,8">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Text="{Binding TimeText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                      <Border Grid.Column="1" Style="{StaticResource Pill.Tone}" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding KindText}" Style="{StaticResource Text.Tone}" FontSize="11.5" FontWeight="SemiBold"/>
+                      </Border>
+                      <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                        <TextBlock Text="{Binding Summary}" Style="{StaticResource Text.Wrap}" FontSize="12.5"/>
+                        <TextBlock Text="{Binding Note}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextTrimming="None" Margin="0,2,0,0"
+                                   Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}"/>
+                        <Button Style="{StaticResource Button.Link}" Content="{Binding ToggleText}" Command="{Binding ToggleCommand}" HorizontalAlignment="Left"
+                                Margin="0,4,0,0" Visibility="{Binding HasSections, Converter={StaticResource BoolToVisibility}}"/>
+                        <ItemsControl ItemsSource="{Binding Sections}" Margin="0,4,0,0"
+                                      Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <StackPanel Margin="0,6,0,0">
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Label}" FontSize="10.5" Margin="0,0,0,3"/>
+                                <TextBlock Text="{Binding Text}" Style="{StaticResource Text.Wrap}" FontSize="12"
+                                           Visibility="{Binding IsText, Converter={StaticResource BoolToVisibility}}"/>
+                                <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="{StaticResource Font.Code}" FontSize="11.5"
+                                         Padding="8,6" Visibility="{Binding IsCode, Converter={StaticResource BoolToVisibility}}"/>
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="Nothing recorded yet besides the scan. Verdicts, AI analyses and fixes appear here as you work."
+                       Style="{StaticResource Text.Wrap}" FontSize="12"
+                       Visibility="{Binding HasTimeline, Converter={StaticResource InverseBoolToVisibility}}"/>
+          </Grid>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+  </Grid>
 </UserControl>

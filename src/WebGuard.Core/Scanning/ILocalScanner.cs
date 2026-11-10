@@ -10,9 +10,18 @@ public interface ILocalScanner
         CancellationToken cancellationToken);
 }
 
-/// <summary>Stores completed scans for the Scan History page. v0.2 keeps them in memory; Phase 4 moves this to PostgreSQL.</summary>
+/// <summary>
+/// Stores scan sessions for the Scan History page: the scan report plus everything done with it afterwards
+/// (verdicts, AI analyses, fixes, exports), newest first.
+/// </summary>
 public interface IScanHistoryStore
 {
     Task AddAsync(ScanReport report, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ScanReport>> GetRecentAsync(int take, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds an activity to the session of <paramref name="scanId"/>; ignored when that session is not stored.</summary>
+    Task AppendActivityAsync(Guid scanId, SessionActivity activity, CancellationToken cancellationToken = default);
+
+    /// <summary>Activities of a session in the order they happened.</summary>
+    Task<IReadOnlyList<SessionActivity>> GetActivitiesAsync(Guid scanId, CancellationToken cancellationToken = default);
 }

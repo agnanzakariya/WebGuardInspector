@@ -228,6 +228,7 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
             var previous = (await _history.GetRecentAsync(50).ConfigureAwait(true))
                 .FirstOrDefault(r => string.Equals(r.RootFolder, report.RootFolder, StringComparison.OrdinalIgnoreCase));
             await _history.AddAsync(report).ConfigureAwait(true);
+            await RecordScanAsync(report, brainNote).ConfigureAwait(true);
             LoadReport(report, previous);
             StatusMessage = $"Completed: {DisplayFormat.Count(report.Statistics.FileCount)} files, " +
                             $"{DisplayFormat.Count(report.Statistics.HashedCount)} hashed, {DisplayFormat.Count(report.Statistics.ErrorCount)} errors, " +
@@ -380,6 +381,19 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(InventoryCaption));
     }
 
+    /// <summary>First entry of the session in Scan History: what was scanned and what the engines did.</summary>
+    private async Task RecordScanAsync(ScanReport report, string? brainNote)
+    {
+        var st = report.Statistics;
+        var sev = Core.Findings.SeveritySummary.From(report.Findings);
+        var engines = string.Join("; ", report.Engines.Select(e => $"{e.DisplayName}: {e.Outcome}" + (e.Outcome == "Completed" ? $" ({e.FindingCount})" : string.Empty)));
+        var summary = string.Create(CultureInfo.InvariantCulture,
+            $"Scanned {st.FileCount:N0} files ({st.HashedCount:N0} hashed, {st.ErrorCount:N0} errors) in {report.Duration.TotalSeconds:0.0} s: " +
+            $"{report.Findings.Count} findings ({sev.Critical} Critical, {sev.High} High, {sev.Medium} Medium, {sev.Low} Low)");
+        await _history.AppendActivityAsync(report.ScanId, new SessionActivity(DateTimeOffset.UtcNow, SessionActivityKind.Scan, summary, report.RootFolder,
+            "Engines: " + engines + (brainNote is null ? string.Empty : ". " + brainNote))).ConfigureAwait(true);
+    }
+
     private async Task ExportAsync()
     {
         if (_report is null) return;
@@ -397,6 +411,8 @@ public sealed class ScanWorkspaceViewModel : ObservableObject, IDisposable
                 await _exporter.ExportAsync(_report, stream, CancellationToken.None).ConfigureAwait(true);
             }
             StatusMessage = "Report exported: " + path;
+            await _history.AppendActivityAsync(_report.ScanId, new SessionActivity(DateTimeOffset.UtcNow, SessionActivityKind.ReportExported,
+                $"{_exporter.FormatName} report exported", null, path)).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
