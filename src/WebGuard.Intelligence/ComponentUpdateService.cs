@@ -29,6 +29,9 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
     private static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>"winget show" may refresh its source catalog first.</summary>
+    private static readonly TimeSpan WingetLookupTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan UpdateTimeout = TimeSpan.FromMinutes(10);
     private const long MaxDownloadBytes = 300L * 1024 * 1024;
 
@@ -87,6 +90,13 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
             note = "Latest version unknown: " + (ex is TaskCanceledException ? "no answer in time." : ex.Message);
         }
         var newer = latest is not null && source != ComponentSource.Missing && AppVersion.IsNewer(latest, component.Version ?? "0");
+        // GitHub releases come first; the winget catalog follows a few days later. Only offer what winget can install.
+        if (newer && source == ComponentSource.Winget && await WingetVersionAsync(spec, cancellationToken).ConfigureAwait(false) is { } inWinget &&
+            !AppVersion.IsNewer(inWinget, component.Version ?? "0"))
+        {
+            newer = false;
+            note = $"Version {latest} is out but winget still offers {inWinget}; the update appears here once winget publishes it (usually within a few days).";
+        }
         note ??= source switch
         {
             ComponentSource.Missing => "Not installed. Install it (see README) or set its path in Settings.",
@@ -213,9 +223,34 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
         progress?.Report($"winget upgrade {spec.WingetId}…");
         var result = await RunAsync(winget, ["upgrade", "--id", spec.WingetId!, "--exact", "--silent", "--accept-package-agreements",
             "--accept-source-agreements", "--disable-interactivity"], Path.GetTempPath(), cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode == WingetNoNewerVersion)
+            return $"winget does not offer a newer {component.Name} yet (the new release is not in the winget catalog). Try again in a few days.";
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"winget could not update {component.Name} (exit code {result.ExitCode}): {LastLine(result.StandardOutput + result.StandardError)}");
         return $"{component.Name} updated with winget.";
+    }
+
+    /// <summary>APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (0x8A15002B): the catalog has no newer version.</summary>
+    private const int WingetNoNewerVersion = unchecked((int)0x8A15002B);
+
+    /// <summary>Version the winget catalog offers for the package, or null when winget is missing or does not answer.</summary>
+    private async Task<string?> WingetVersionAsync(Spec spec, CancellationToken cancellationToken)
+    {
+        if (spec.WingetId is null || locateWinget() is not { } winget) return null;
+        try
+        {
+            var result = await runner.RunAsync(new ProcessRunRequest(winget,
+                ["show", "--id", spec.WingetId, "--exact", "--accept-source-agreements", "--disable-interactivity"],
+                Path.GetTempPath(), WingetLookupTimeout, 256 * 1024), cancellationToken).ConfigureAwait(false);
+            if (result.ExitCode != 0 || result.TimedOut) return null;
+            var line = result.StandardOutput.Split('\n').Select(l => l.Trim())
+                .FirstOrDefault(l => l.StartsWith("Version:", StringComparison.OrdinalIgnoreCase));
+            return line is null ? null : Normalise(line["Version:".Length..].Trim());
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private async Task<string> UpdateWithPipAsync(Spec spec, ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken)

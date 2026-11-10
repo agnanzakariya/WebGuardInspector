@@ -92,6 +92,31 @@ public static class ComponentUpdateTests
     }
 
     [Test]
+    public static async Task Winget_updates_are_offered_only_when_the_winget_catalog_has_them()
+    {
+        using var temp = new TempFolder();
+        var winget = temp.Write("winget.exe", "x");
+        var osv = temp.Write(@"Microsoft\WinGet\Packages\Google.OSVScanner_x\osv-scanner.exe", "x");
+        var catalog = "2.6.0";
+        var runner = new FakeProcessRunner(r => r.Arguments[0] == "show"
+            ? FakeProcessRunner.Ok($"Found OSV Scanner [Google.OSVScanner]\nVersion: {catalog}\nPublisher: Google\n")
+            : FakeProcessRunner.Ok("No newer package versions are available from the configured sources.", unchecked((int)0x8A15002B)));
+        var service = new ComponentUpdateService(new HttpClient(new Handler(Latest)), runner, Path.Combine(temp.Path, "tools"), () => winget);
+        InstalledComponent[] installed = [new("osv-scanner", "OSV-Scanner", "2.6.0", osv)];
+
+        var waiting = (await service.CheckAsync(installed, CancellationToken.None)).Single();
+        Assert.True(waiting is { LatestVersion: "2.7.0", UpdateAvailable: false } && waiting.Note!.Contains("winget still offers 2.6.0", StringComparison.Ordinal),
+            "released on GitHub but not in winget yet: no update button, explained");
+
+        catalog = "2.7.0";
+        Assert.True((await service.CheckAsync(installed, CancellationToken.None)).Single() is { UpdateAvailable: true, CanUpdate: true }, "offered once winget has it");
+
+        var message = await service.UpdateAsync(new ComponentState("osv-scanner", "OSV-Scanner", "2.6.0", "2.7.0", osv, ComponentSource.Winget, true, null),
+            null, CancellationToken.None);
+        Assert.True(message.Contains("does not offer a newer", StringComparison.Ordinal), "winget 'no newer version' is reported, not thrown");
+    }
+
+    [Test]
     public static async Task Startup_check_offers_to_open_components_when_updates_exist()
     {
         var dialogs = new FakeDialogs();

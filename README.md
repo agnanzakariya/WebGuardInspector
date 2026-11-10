@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v1.0.0
+# Azura — WebGuard Inspector v1.0.1
 
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
@@ -379,6 +379,8 @@ masing-masing: Gitleaks (MIT), OSV-Scanner (Apache-2.0) dan YARA-X (BSD-3-Clause
 ClamAV (GPL-2.0), Semgrep, Claude Code, Obsidian dan LM Studio tidak dibundel; dipasang terpisah sesuai lisensinya.
 
 ## Changelog
+
+**1.0.1** — Settings → Components: komponen yang dipasang lewat winget hanya ditawari update bila katalog winget sudah memuat versi baru (rilis GitHub biasanya lebih dulu); jawaban winget "tidak ada versi baru" ditampilkan sebagai info, bukan error. 101 tests.
 
 **1.0.0** — Rilis produksi pertama. Second Brain lebih dulu: scan ulang hanya mengirim file yang berubah ke engine (cache per folder, `IIncrementalSecurityEngine`, `FileScanResultCacheStore`); engine *Second Brain memory* untuk file identik yang sudah dikonfirmasi berbahaya; keputusan berlaku untuk file identik di proyek lain; fix yang pernah diterapkan dan analisis AI lama dipakai ulang; keputusan serupa disertakan di prompt AI. Diuji dengan engine asli: scan ulang tanpa perubahan 26,7 s → 3,9 s. 100 tests.
 
