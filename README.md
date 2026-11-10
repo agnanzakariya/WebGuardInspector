@@ -1,5 +1,7 @@
 # Azura — WebGuard Inspector v1.1.0
 
+**Homepage:** <https://agnanzakariya.github.io/WebGuardInspector/> · **Unduh:** [rilis terbaru](https://github.com/agnanzakariya/WebGuardInspector/releases/latest)
+
 *Local Source Security Workspace.* Logo: `assets/icon.png` (asli) dan `assets/azura-logo.png` (dibersihkan, persegi);
 ikon aplikasi `src/WebGuard.Desktop/Assets/azura.ico` (16–256 px).
 

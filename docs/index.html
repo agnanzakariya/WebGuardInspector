@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azura — WebGuard Inspector · Inspeksi keamanan source code, sepenuhnya lokal</title>
+<meta name="description" content="Azura WebGuard Inspector: aplikasi Windows untuk memeriksa keamanan source code aplikasi web secara lokal dengan Semgrep, Gitleaks, OSV-Scanner, YARA-X, ClamAV, AI yang ditinjau manusia, Second Brain di Obsidian dan laporan PDF.">
+<meta property="og:title" content="Azura — WebGuard Inspector">
+<meta property="og:description" content="Inspeksi keamanan source code aplikasi web, sepenuhnya di PC Anda. Gratis dan open source (MIT).">
+<meta property="og:image" content="screenshots/overview.png">
+<link rel="icon" href="logo.png">
+<style>
+  :root {
+    --bg: #0b1220; --bg2: #0f1a2e; --card: #131f36; --card2: #172540; --line: #22324f;
+    --text: #e6ecf7; --muted: #9aa8c2; --dim: #6f7f9c;
+    --blue: #2f6bff; --blue2: #4d82ff; --cyan: #38bdf8; --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif; }
+  a { color: var(--blue2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+  .wrap { width: min(1160px, 92vw); margin: 0 auto; }
+  code, .mono { font-family: "Cascadia Code", Consolas, "Courier New", monospace; font-size: .92em; }
+
+  /* Navigation */
+  nav { position: sticky; top: 0; z-index: 10; background: rgba(11, 18, 32, .86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 600; }
+  .brand:hover { text-decoration: none; }
+  .brand img { width: 34px; height: 34px; }
+  .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; line-height: 1.1; }
+  .nav-links { display: flex; gap: 22px; margin-left: auto; }
+  .nav-links a { color: var(--muted); font-size: 15px; }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid transparent; transition: background .15s, border-color .15s, transform .15s; }
+  .btn:hover { text-decoration: none; transform: translateY(-1px); }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue2); }
+  .btn-ghost { background: transparent; color: var(--text); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--blue2); }
+  .btn-sm { padding: 8px 14px; font-size: 14px; }
+
+  /* Hero */
+  .hero { padding: 72px 0 40px; background: radial-gradient(900px 420px at 78% 10%, rgba(47, 107, 255, .22), transparent 70%), radial-gradient(700px 360px at 10% 0%, rgba(56, 189, 248, .10), transparent 70%); }
+  .hero-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 48px; align-items: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 13px; background: rgba(19, 31, 54, .7); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(34, 197, 94, .15); }
+  h1 { font-size: clamp(36px, 5vw, 56px); line-height: 1.08; margin: 18px 0 8px; letter-spacing: -.02em; }
+  h1 .sub { display: block; font-size: .5em; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-top: 8px; }
+  .lead { font-size: 19px; color: #c9d4e8; max-width: 620px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 14px; }
+  .meta { color: var(--dim); font-size: 14px; }
+  .meta b { color: var(--muted); font-weight: 600; }
+  .hero-logo { justify-self: center; width: min(360px, 80%); filter: drop-shadow(0 30px 60px rgba(47, 107, 255, .35)); }
+  .shot { margin-top: 48px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+
+  /* Sections */
+  section { padding: 72px 0; }
+  section.alt { background: var(--bg2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  h2 { font-size: clamp(26px, 3.2vw, 36px); margin: 0 0 10px; letter-spacing: -.01em; }
+  .section-lead { color: var(--muted); max-width: 720px; margin: 0 0 36px; font-size: 17px; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 40px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { color: var(--muted); font-size: 14px; }
+
+  /* Feature cards */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+  .card h3 { margin: 14px 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .icon { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: rgba(47, 107, 255, .14); color: var(--blue2); }
+  .icon svg { width: 22px; height: 22px; }
+  .icon.green { background: rgba(34, 197, 94, .13); color: var(--green); }
+  .icon.amber { background: rgba(245, 158, 11, .13); color: var(--amber); }
+  .icon.cyan { background: rgba(56, 189, 248, .13); color: var(--cyan); }
+  .icon.red { background: rgba(239, 68, 68, .13); color: var(--red); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; counter-reset: step; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; position: relative; }
+  .step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; }
+  .step h3 { font-size: 16px; margin: 12px 0 4px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; }
+  .loop { margin-top: 16px; color: var(--muted); font-size: 14px; }
+
+  /* Screenshots */
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  figure { margin: 0; }
+  figure .frame { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+  /* Principles */
+  .principles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 32px; padding: 0; margin: 0; list-style: none; }
+  .principles li { display: flex; gap: 12px; color: #c9d4e8; }
+  .principles svg { flex: none; width: 20px; height: 20px; color: var(--green); margin-top: 3px; }
+
+  /* Download */
+  .download { background: linear-gradient(135deg, #142a5c, #10203f); border: 1px solid #2b4580; border-radius: 20px; padding: 40px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 36px; align-items: start; }
+  .download h2 { margin-bottom: 6px; }
+  .download ol { margin: 14px 0 0; padding-left: 20px; color: #c9d4e8; }
+  .download ol li { margin: 6px 0; }
+  .req { background: rgba(11, 18, 32, .55); border: 1px solid #2b4580; border-radius: var(--radius); padding: 20px 22px; }
+  .req h3 { margin: 0 0 8px; font-size: 16px; }
+  .req ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14.5px; }
+  .req li { margin: 4px 0; }
+  .note { color: var(--muted); font-size: 13.5px; margin-top: 14px; }
+
+  footer { padding: 36px 0 48px; color: var(--dim); font-size: 14px; border-top: 1px solid var(--line); }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+  footer a { color: var(--muted); }
+
+  @media (max-width: 960px) {
+    .hero-grid, .download { grid-template-columns: 1fr; }
+    .hero-logo { grid-row: 1; width: 200px; }
+    .grid { grid-template-columns: 1fr 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .nav-links { display: none; }
+    nav .btn-ghost { margin-left: auto; }
+  }
+  @media (max-width: 620px) {
+    .grid, .steps, .shots, .principles, .stats { grid-template-columns: 1fr; }
+    .download { padding: 26px; }
+    nav .btn-ghost { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="logo.png" alt=""><span>Azura<small>WebGuard Inspector</small></span></a>
+    <div class="nav-links">
+      <a href="#fitur">Fitur</a>
+      <a href="#cara-kerja">Cara kerja</a>
+      <a href="#tampilan">Tampilan</a>
+      <a href="#privasi">Privasi</a>
+      <a href="#unduh">Unduh</a>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="https://github.com/agnanzakariya/WebGuardInspector" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.29-1.69-1.29-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.7 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>Gratis &amp; open source · Lisensi MIT · <span id="ver">rilis terbaru</span></span>
+        <h1>Azura<span class="sub">WebGuard Inspector</span></h1>
+        <p class="lead">Inspeksi keamanan source code aplikasi web, <b>sepenuhnya di PC Anda</b>. Temukan kerentanan, secret yang bocor,
+          dependency rentan, dan backdoor tersembunyi pada plugin, tema, maupun proyek pihak ketiga, lalu perbaiki dengan bantuan AI yang
+          selalu Anda tinjau.</p>
+        <div class="cta">
+          <a class="btn btn-primary" id="download-hero" href="https://github.com/agnanzakariya/WebGuardInspector/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
+            Unduh untuk Windows
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/agnanzakariya/WebGuardInspector" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5"/></svg>
+            Lihat repositori
+          </a>
+        </div>
+        <div class="meta"><b>Windows 10/11 (x64)</b> · installer per-user, tanpa hak admin · gratis</div>
+      </div>
+      <img class="hero-logo" src="logo.png" alt="Logo Azura: ksatria biru di atas gajah">
+    </div>
+
+    <div class="shot"><img src="screenshots/overview.png" alt="Halaman Overview Azura setelah memindai proyek demo" loading="lazy"></div>
+
+    <div class="stats">
+      <div class="stat"><b>5 engine + memori</b><span>Semgrep, Gitleaks, OSV-Scanner, YARA-X, ClamAV dan Second Brain</span></div>
+      <div class="stat"><b>100% lokal</b><span>Kode tidak pernah diunggah; lookup online hanya bila Anda izinkan</span></div>
+      <div class="stat"><b>AI pilihan Anda</b><span>Model lokal (LM Studio/Ollama) atau Claude</span></div>
+      <div class="stat"><b>Laporan PDF</b><span>Setiap sesi tercatat lengkap dan bisa diekspor</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="fitur">
+  <div class="wrap">
+    <h2>Semua yang dibutuhkan untuk memeriksa kode yang tidak Anda percayai</h2>
+    <p class="section-lead">Engine deteksi yang deterministik menemukan masalah, AI membantu menjelaskan dan memperbaikinya, dan Anda yang memutuskan.
+      Semua keputusan disimpan agar pemeriksaan berikutnya lebih cepat.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+        <h3>Deteksi berlapis</h3>
+        <p>Analisis statis dengan rule PHP khusus, deteksi secret, audit dependency, signature malware dan web shell, serta antivirus.</p>
+        <div class="tags"><span class="tag">Semgrep</span><span class="tag">Gitleaks</span><span class="tag">OSV-Scanner</span><span class="tag">YARA-X</span><span class="tag">ClamAV</span></div>
+      </div>
+      <div class="card">
+        <div class="icon cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+        <h3>Threat intelligence opsional</h3>
+        <p>Cek hash file ke MalwareBazaar dan ThreatFox, advisory dari OSV.dev, dan tandai kerentanan yang aktif dieksploitasi (CISA KEV).</p>
+        <div class="tags"><span class="tag">Hanya hash &amp; nama paket</span><span class="tag">Opt-in</span></div>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></div>
+        <h3>AI Analyst</h3>
+        <p>Model lokal menjelaskan setiap temuan: apa yang terjadi, mengapa berbahaya, dan usulan perbaikan. Hasilnya selalu ditandai sebagai hipotesis.</p>
+        <div class="tags"><span class="tag">LM Studio</span><span class="tag">Ollama</span><span class="tag">Secret diredaksi</span></div>
+      </div>
+      <div class="card">
+        <div class="icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5Z"/></svg></div>
+        <h3>Fixing dengan AI</h3>
+        <p>Claude atau model lokal mengusulkan perubahan sebagai diff. File baru ditulis setelah Anda menekan Apply, dengan backup, salinan "wreck", dan Undo.</p>
+        <div class="tags"><span class="tag">Diff ditinjau</span><span class="tag">Backup + Undo</span><span class="tag">False positive dikonfirmasi</span></div>
+      </div>
+      <div class="card">
+        <div class="icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg></div>
+        <h3>Second Brain lebih dulu</h3>
+        <p>Setiap scan, analisis dan keputusan disimpan di vault Obsidian. File yang tidak berubah tidak dipindai ulang, file berbahaya yang pernah dikonfirmasi langsung dikenali, dan fix lama dipakai ulang.</p>
+        <div class="tags"><span class="tag">Obsidian</span><span class="tag">Hash SHA-256</span><span class="tag">Scan ulang lebih cepat</span></div>
+      </div>
+      <div class="card">
+        <div class="icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>
+        <h3>Scan History &amp; laporan PDF</h3>
+        <p>Setiap sesi tercatat lengkap: scan, keputusan, analisis AI, usulan dan penerapan fix. Ekspor menjadi laporan PDF yang memuat remediation dan diff.</p>
+        <div class="tags"><span class="tag">Resume per sesi</span><span class="tag">PDF</span><span class="tag">JSON</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="cara-kerja">
+  <div class="wrap">
+    <h2>Cara kerja</h2>
+    <p class="section-lead">Satu alur yang sama untuk setiap proyek, dari folder sampai laporan.</p>
+    <div class="steps">
+      <div class="step"><h3>Pilih folder</h3><p>Proyek hanya dibaca, tidak pernah diunggah.</p></div>
+      <div class="step"><h3>Inventory &amp; hash</h3><p>Setiap file diberi SHA-256 dan dicocokkan dengan Second Brain.</p></div>
+      <div class="step"><h3>Deteksi</h3><p>Engine memindai file yang berubah; hasil file lain dipakai ulang.</p></div>
+      <div class="step"><h3>Tinjau &amp; perbaiki</h3><p>Validasi temuan, minta analisis AI, terapkan fix lewat diff.</p></div>
+      <div class="step"><h3>Catat &amp; laporkan</h3><p>Semua masuk Second Brain dan Scan History, siap diekspor ke PDF.</p></div>
+    </div>
+    <p class="loop">↻ Pengetahuan yang tersimpan dipakai lagi pada scan, analisis dan fixing berikutnya.
+      <a href="https://github.com/agnanzakariya/WebGuardInspector/blob/main/docs/business-process.md" target="_blank" rel="noopener">Lihat alur proses lengkap →</a></p>
+  </div>
+</section>
+
+<section id="tampilan">
+  <div class="wrap">
+    <h2>Tampilan aplikasi</h2>
+    <p class="section-lead">Desktop app WPF dengan tema gelap dan terang. Contoh berikut memakai proyek demo fiktif.</p>
+    <div class="shots">
+      <figure><div class="frame"><img src="screenshots/overview.png" alt="Halaman Overview" loading="lazy"></div>
+        <figcaption><b>Overview:</b> pilih folder, scan, lalu lihat file dan temuan sekaligus.</figcaption></figure>
+      <figure><div class="frame"><img src="screenshots/findings.png" alt="Halaman Findings" loading="lazy"></div>
+        <figcaption><b>Findings:</b> severity, bukti, CWE, saran perbaikan, validasi dan AI Analyst.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="privasi">
+  <div class="wrap">
+    <h2>Dirancang untuk kode yang sensitif</h2>
+    <p class="section-lead">Azura dibuat untuk memeriksa kode yang tidak dipercaya, tanpa membocorkan kode yang Anda lindungi.</p>
+    <ul class="principles">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>File proyek hanya dibaca; tidak ada yang dieksekusi atau diunggah.</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>Lookup online bersifat opt-in dan hanya mengirim hash file atau nama paket.</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>Secret diredaksi sebelum sampai ke AI, catatan, maupun laporan.</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>Output AI selalu hipotesis; keputusan dan perubahan kode tetap di tangan Anda.</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>Bisa berjalan sepenuhnya offline dengan model AI lokal.</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>Server MCP read-only, dibatasi ke satu folder, dan diaudit.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="unduh">
+  <div class="wrap">
+    <div class="download">
+      <div>
+        <h2>Unduh Azura</h2>
+        <p class="section-lead" style="margin-bottom:20px">Installer Windows berisi aplikasi beserta Gitleaks, OSV-Scanner dan YARA-X. Semgrep, ClamAV, Claude Code,
+          Obsidian dan LM Studio bisa dipasang sekalian lewat pilihan di installer.</p>
+        <div class="cta" style="margin:0 0 6px">
+          <a class="btn btn-primary" id="download-main" href="https://github.com/agnanzakariya/WebGuardInspector/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
+            <span id="download-label">Unduh installer terbaru</span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/agnanzakariya/WebGuardInspector/releases" target="_blank" rel="noopener">Semua rilis</a>
+        </div>
+        <p class="note" id="download-note">Atau buka halaman rilis terbaru di GitHub dan pilih file <span class="mono">Azura-WebGuard-Inspector-Setup-&lt;versi&gt;.exe</span>.</p>
+        <ol>
+          <li>Jalankan installer. Bila Windows SmartScreen memperingatkan (installer belum ditandatangani), pilih <i>More info → Run anyway</i>.</li>
+          <li>Selesaikan wizard awal: engine, privasi, AI, fixing dan vault Second Brain.</li>
+          <li>Pilih folder proyek, tekan <b>Start Scan</b>, lalu tinjau temuan.</li>
+        </ol>
+        <p class="note">Versi berikutnya bisa dipasang dari dalam aplikasi: <i>Settings → Updates</i>. Setiap unduhan diverifikasi dengan SHA-256.</p>
+      </div>
+      <div class="req">
+        <h3>Kebutuhan sistem</h3>
+        <ul>
+          <li>Windows 10 atau 11, 64-bit</li>
+          <li>Sekitar 250 MB ruang disk, ditambah ±110 MB bila memakai signature ClamAV</li>
+          <li>Opsional: LM Studio atau Ollama untuk AI lokal</li>
+          <li>Opsional: akun Claude untuk fixing dengan Claude Code</li>
+          <li>Opsional: Obsidian untuk membuka Second Brain</li>
+        </ul>
+        <h3 style="margin-top:18px">Kode sumber</h3>
+        <ul>
+          <li>C# / .NET 10 (WPF), tanpa paket NuGet</li>
+          <li>Lisensi MIT</li>
+          <li><a href="https://github.com/agnanzakariya/WebGuardInspector" target="_blank" rel="noopener">github.com/agnanzakariya/WebGuardInspector</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Agnan Zakariya · Azura WebGuard Inspector · <a href="https://github.com/agnanzakariya/WebGuardInspector/blob/main/LICENSE" target="_blank" rel="noopener">Lisensi MIT</a></div>
+    <div><a href="https://github.com/agnanzakariya/WebGuardInspector" target="_blank" rel="noopener">Repositori</a> ·
+      <a href="https://github.com/agnanzakariya/WebGuardInspector/releases/latest">Unduh</a> ·
+      <a href="https://github.com/agnanzakariya/WebGuardInspector/issues" target="_blank" rel="noopener">Laporkan masalah</a></div>
+  </div>
+</footer>
+
+<script>
+  // Shows the latest version and links the installer directly; without network access the links keep pointing to the releases page.
+  fetch("https://api.github.com/repos/agnanzakariya/WebGuardInspector/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (release) {
+      if (!release) return;
+      var version = (release.tag_name || "").replace(/^v/, "");
+      var asset = (release.assets || []).find(function (a) { return /^Azura-WebGuard-Inspector-Setup-.*\.exe$/.test(a.name); });
+      if (version) document.getElementById("ver").textContent = "v" + version;
+      if (!asset) return;
+      ["download-hero", "download-main"].forEach(function (id) { document.getElementById(id).href = asset.browser_download_url; });
+      var mb = (asset.size / 1048576).toFixed(1);
+      document.getElementById("download-label").textContent = "Unduh v" + version + " (" + mb + " MB)";
+      var digest = (asset.digest || "").replace(/^sha256:/, "");
+      document.getElementById("download-note").innerHTML = "<span class=\"mono\">" + asset.name + "</span>" +
+        (digest ? " · SHA-256 <span class=\"mono\" style=\"word-break:break-all\">" + digest + "</span>" : "");
+    })
+    .catch(function () { });
+</script>
+</body>
+</html>
