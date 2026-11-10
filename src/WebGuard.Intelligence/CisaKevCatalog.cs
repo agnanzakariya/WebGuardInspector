@@ -7,7 +7,7 @@ namespace WebGuard.Intelligence;
 /// CVE ids from the public CISA Known Exploited Vulnerabilities catalog. Downloading it sends no user data;
 /// it is still only fetched when external lookups are allowed, and cached for 24 h for offline use.
 /// </summary>
-public sealed class CisaKevCatalog(HttpClient http, IIntelligenceCache cache)
+public sealed class CisaKevCatalog(HttpClient http, IIntelligenceCache cache, TransientRetry? retry = null)
 {
     public const string SourceId = "cisa-kev";
     public static readonly Uri Endpoint = new("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json");
@@ -25,7 +25,8 @@ public sealed class CisaKevCatalog(HttpClient http, IIntelligenceCache cache)
         if (cached is not null) return cached.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!allowDownload) return null;
 
-        using var response = await http.GetAsync(Endpoint, cancellationToken).ConfigureAwait(false);
+        using var response = await (retry ?? TransientRetry.Default).SendAsync(http, () => new HttpRequestMessage(HttpMethod.Get, Endpoint),
+            cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         var ids = Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
         await cache.SetAsync(CacheKey, ids, SourceId, cancellationToken).ConfigureAwait(false);

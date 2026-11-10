@@ -14,7 +14,8 @@ public sealed class ThreatFoxHashIntelligence(
     HttpClient http,
     IIntelligenceCache cache,
     Func<IntelligenceSettings> settings,
-    TimeProvider? timeProvider = null) : IMalwareHashIntelligence
+    TimeProvider? timeProvider = null,
+    TransientRetry? retry = null) : IMalwareHashIntelligence
 {
     public const string SourceId = "threatfox";
     public static readonly Uri Endpoint = new("https://threatfox-api.abuse.ch/api/v1/");
@@ -51,9 +52,12 @@ public sealed class ThreatFoxHashIntelligence(
 
     private async Task<MalwareHashVerdict> QueryAsync(object query, string hash, string authKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = JsonContent.Create(query) };
-        request.Headers.Add("Auth-Key", authKey);
-        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await (retry ?? TransientRetry.Default).SendAsync(http, () =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = JsonContent.Create(query) };
+            request.Headers.Add("Auth-Key", authKey);
+            return request;
+        }, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         return Parse(hash, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false), _time.GetUtcNow());
     }
