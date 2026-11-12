@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v1.1.1
+# Azura — WebGuard Inspector v1.1.2
 
 **Homepage:** <https://agnanzakariya.github.io/WebGuardInspector/> · **Unduh:** [rilis terbaru](https://github.com/agnanzakariya/WebGuardInspector/releases/latest)
 
@@ -381,6 +381,8 @@ masing-masing: Gitleaks (MIT), OSV-Scanner (Apache-2.0) dan YARA-X (BSD-3-Clause
 ClamAV (GPL-2.0), Semgrep, Claude Code, Obsidian dan LM Studio tidak dibundel; dipasang terpisah sesuai lisensinya.
 
 ## Changelog
+
+**1.1.2** — Batas waktu AI lokal diperpanjang untuk model besar di CPU (mis. Qwen 27B, sekitar 1 token/detik): AI Analyst 30 menit (sebelumnya 5), Fixing dengan model lokal 60 menit (sebelumnya 10). Batas waktu yang habis kini dilaporkan sebagai "model tidak menjawab dalam N menit" (sebelumnya terbaca "canceled"), dan pesan progres menjelaskan lamanya.
 
 **1.1.1** — Lookup online (MalwareBazaar, ThreatFox, OSV.dev, CISA KEV) dicoba ulang otomatis hingga 2 kali bila layanan sedang bermasalah (408, 429, 5xx seperti 502 Bad Gateway, koneksi putus, timeout), dengan jeda 1 dan 3 detik atau sesuai Retry-After (maks. 10 detik); error permanen seperti kunci salah tidak diulang. Peringatan Malware hash lookup kini menyebut layanan, jumlah dan alasan kegagalan, serta bahwa file tersebut dicek ulang pada scan berikutnya. 106 tests.
 

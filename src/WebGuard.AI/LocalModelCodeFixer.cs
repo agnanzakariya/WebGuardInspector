@@ -16,7 +16,8 @@ public sealed partial class LocalModelCodeFixer(OpenAiCompatibleClient client, F
     TimeProvider? timeProvider = null) : ICodeFixer
 {
     private static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(4);
-    private static readonly TimeSpan FixTimeout = TimeSpan.FromMinutes(10);
+    /// <summary>A full fix answer (up to 2,500 tokens) from a large model on CPU can take most of an hour.</summary>
+    public static readonly TimeSpan FixTimeout = TimeSpan.FromMinutes(60);
     private const int MaxAnswerTokens = 2500;   // with the prompt and file this stays inside an 8k context
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
@@ -73,9 +74,10 @@ public sealed partial class LocalModelCodeFixer(OpenAiCompatibleClient client, F
         {
             throw new InvalidOperationException("Local model: " + ex.Message, ex);
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new InvalidOperationException($"The local model did not answer within {FixTimeout.TotalMinutes:0} minutes.");
+            throw new InvalidOperationException($"The local model did not answer within {FixTimeout.TotalMinutes:0} minutes. " +
+                                                "Use a smaller or faster model, or close other programs to free memory.");
         }
         return ParseReply(request.Finding.Id, model, reply, _time.GetUtcNow());
     }

@@ -249,7 +249,8 @@ public sealed class FindingsViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            AnalysisMessage = "Analyzing with the local model… this can take a minute on CPU.";
+            AnalysisMessage = "Analyzing with the local model… on a CPU this takes from a minute to half an hour for large models. " +
+                              "You can keep working or press Cancel.";
             var prior = memory is null ? null : await KnowledgeLookup.PriorKnowledgeAsync(_secondBrain!, finding, _analysisCts.Token).ConfigureAwait(true);
             var context = FindingContextBuilder.Build(new ProjectScope(_report.RootFolder), finding, _all) with { PriorKnowledge = prior };
             var analysis = await _analyst.AnalyzeAsync(context, _analysisCts.Token).ConfigureAwait(true);

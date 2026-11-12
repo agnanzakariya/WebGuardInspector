@@ -6,6 +6,6 @@ public static class AppInfo
     public const string Brand = "Azura";
     public const string Product = "WebGuard Inspector";
     public const string Name = Brand + " — " + Product;
-    public const string Version = "1.1.1";
+    public const string Version = "1.1.2";
     public const string Tagline = "Local Source Security Workspace";
 }

@@ -17,7 +17,8 @@ public sealed partial class LocalAiSecurityAnalyst(OpenAiCompatibleClient client
     : IAiSecurityAnalyst
 {
     private static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(4);
-    private static readonly TimeSpan AnalysisTimeout = TimeSpan.FromMinutes(5);
+    /// <summary>Large models on a laptop CPU produce about one token per second, and reasoning models think first.</summary>
+    public static readonly TimeSpan AnalysisTimeout = TimeSpan.FromMinutes(30);
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
     public const string SystemPrompt =
@@ -79,8 +80,18 @@ public sealed partial class LocalAiSecurityAnalyst(OpenAiCompatibleClient client
         }
         if (model.Error is not null) throw new InvalidOperationException(model.Error);
 
-        var reply = await client.CompleteAsync(endpoint, model.Id!, [new ChatMessage("system", SystemPrompt), new ChatMessage("user", BuildPrompt(context))],
-            timeout.Token).ConfigureAwait(false);
+        string reply;
+        try
+        {
+            reply = await client.CompleteAsync(endpoint, model.Id!, [new ChatMessage("system", SystemPrompt), new ChatMessage("user", BuildPrompt(context))],
+                timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Our own time limit, not the person's Cancel.
+            throw new InvalidOperationException($"The local model ({model.Id}) did not answer within {AnalysisTimeout.TotalMinutes:0} minutes. " +
+                                                "Use a smaller or faster model, or close other programs to free memory.");
+        }
         return ParseReply(context.Finding.Id, model.Id!, reply, _time.GetUtcNow());
     }
 

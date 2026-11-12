@@ -345,7 +345,9 @@ public sealed class FixingViewModel : PageViewModel, IDisposable
             {
                 cts.Token.ThrowIfCancellationRequested();
                 ProgressText = batch.Length == 1
-                    ? $"Asking {_fixer?.ShortName ?? "the AI"}… this can take from 20 seconds to a few minutes."
+                    ? $"Asking {_fixer?.ShortName ?? "the AI"}… " + (_fixer?.ShortName == "Claude"
+                        ? "this can take from 20 seconds to a few minutes."
+                        : "a large model on a CPU can need many minutes (up to an hour). You can press Cancel.")
                     : string.Create(CultureInfo.InvariantCulture, $"Asking {_fixer?.ShortName ?? "the AI"} about finding {done + 1} of {batch.Length}…");
                 await ProposeAsync(scope, item, cts.Token, askModel).ConfigureAwait(true);
                 done++;
