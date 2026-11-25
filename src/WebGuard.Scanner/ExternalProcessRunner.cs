@@ -8,8 +8,25 @@ namespace WebGuard.Scanner;
 /// Runs an engine executable without a shell: absolute path only, arguments passed as a list (no command-line parsing),
 /// stdin closed, no window, output capped, process tree killed on timeout or cancellation.
 /// </summary>
-public sealed class ExternalProcessRunner : IExternalProcessRunner
+public sealed partial class ExternalProcessRunner : IExternalProcessRunner
 {
+    /// <summary>
+    /// Child processes inherit the error mode: with SEM_FAILCRITICALERRORS a tool whose DLL is missing exits with
+    /// 0xC0000135 instead of showing Windows' "The code execution cannot proceed" dialog, and Azura reports it itself.
+    /// </summary>
+    static ExternalProcessRunner()
+    {
+        if (OperatingSystem.IsWindows()) _ = SetErrorMode(SemFailCriticalErrors | SetErrorMode(0));
+    }
+
+    private const uint SemFailCriticalErrors = 0x0001;
+
+#pragma warning disable SYSLIB1054 // LibraryImport needs unsafe code; one blittable call does not justify that.
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
+    private static extern uint SetErrorMode(uint mode);
+#pragma warning restore SYSLIB1054
+
     public async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);

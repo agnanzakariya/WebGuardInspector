@@ -122,3 +122,26 @@ public interface IIncrementalSecurityEngine
     /// </summary>
     string? ConfigurationStamp(EngineStatus status);
 }
+
+/// <summary>
+/// A tool that Windows could not start because its installation is damaged (a DLL is missing, an entry point is
+/// missing, or a 32/64-bit mix-up). Reported with <see cref="Marker"/> so Settings → Components can offer a repair.
+/// </summary>
+public static class BrokenInstall
+{
+    public const string Marker = "Installation is incomplete";
+
+    /// <summary>STATUS_DLL_NOT_FOUND, STATUS_ENTRYPOINT_NOT_FOUND, STATUS_INVALID_IMAGE_FORMAT.</summary>
+    public static bool IsBrokenExitCode(int exitCode) =>
+        exitCode is unchecked((int)0xC0000135) or unchecked((int)0xC0000139) or unchecked((int)0xC000007B);
+
+    public static string Describe(string executable, int exitCode) =>
+        $"{Marker}: {Path.GetFileName(executable)} cannot start because a file it needs is missing or damaged " +
+        $"(Windows error 0x{exitCode:X8}). Repair it in Settings → Components.";
+
+    public static bool IsBroken(EngineStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        return status.Availability == EngineAvailability.Error && status.Message.StartsWith(Marker, StringComparison.Ordinal);
+    }
+}

@@ -198,6 +198,8 @@ public abstract partial class ExternalToolEngine : ISecurityEngine, IIncremental
         var workDir = Path.GetDirectoryName(path) ?? Path.GetTempPath();
         var result = await Runner.RunAsync(new ProcessRunRequest(path, VersionArguments, workDir, VersionTimeout, 64 * 1024,
             BuildEnvironment(path)), cancellationToken).ConfigureAwait(false);
+        if (BrokenInstall.IsBrokenExitCode(result.ExitCode))
+            throw new EngineRunException(BrokenInstall.Describe(path, result.ExitCode));
         if (result.TimedOut || result.ExitCode != 0)
             throw new EngineRunException($"Version check failed ({Describe(result)}).");
         return ParseVersion(result.StandardOutput + "\n" + result.StandardError);

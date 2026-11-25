@@ -325,6 +325,9 @@
                         </Border>
                         <Button Style="{StaticResource Button.Secondary}" Content="Update" Command="{Binding UpdateCommand}" Padding="12,3" Margin="0,6,0,0"
                                 HorizontalAlignment="Right" Visibility="{Binding State.UpdateAvailable, Converter={StaticResource BoolToVisibility}}"/>
+                        <Button Style="{StaticResource Button.Primary}" Content="Repair" Command="{Binding RepairCommand}" Padding="12,3" Margin="0,6,0,0"
+                                HorizontalAlignment="Right" Visibility="{Binding State.CanRepair, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Reinstall this component the way it was installed"/>
                       </StackPanel>
                     </Grid>
                     <TextBlock Text="{Binding Note}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,6,0,0"

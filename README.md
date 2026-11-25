@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v1.2.0
+# Azura — WebGuard Inspector v1.2.1
 
 **Homepage:** <https://agnanzakariya.github.io/WebGuardInspector/> · **Unduh:** [rilis terbaru](https://github.com/agnanzakariya/WebGuardInspector/releases/latest)
 
@@ -381,6 +381,8 @@ masing-masing: Gitleaks (MIT), OSV-Scanner (Apache-2.0) dan YARA-X (BSD-3-Clause
 ClamAV (GPL-2.0), Semgrep, Claude Code, Obsidian dan LM Studio tidak dibundel; dipasang terpisah sesuai lisensinya.
 
 ## Changelog
+
+**1.2.1** — Perbaikan instalasi rusak dari *Settings → Components*: engine yang tidak bisa start karena file yang dibutuhkan hilang atau rusak (mis. ClamAV tanpa `libcrypto-3-x64.dll`, kode 0xC0000135) ditandai *Needs repair* dengan tombol **Repair** yang memasang ulang sesuai cara pemasangannya (`winget install --force`, `pip install --force-reinstall`, atau unduh ulang alat bawaan dengan cek SHA-256); pemberitahuan saat start juga menyebutnya. Dialog sistem Windows "The code execution cannot proceed" tidak lagi muncul untuk program yang dijalankan Azura. 111 tests.
 
 **1.2.0** — AI lokal ikut dinyalakan saat Azura dibuka: lewat `lms` (CLI LM Studio) Azura menyalakan server lokal dan memuat model AI Analyst (atau model chat pertama yang sudah diunduh) bila belum ada yang termuat, di background tanpa menahan jendela. Pengaturan baru di *Settings → AI Analyst*: nyalakan otomatis, GPU offload (`auto`, `off`, `max` atau 0–1, mis. `0.75` untuk GPU terintegrasi) dan panjang konteks. Status dan tombol *Start local AI* di panel kiri bawah. Hanya untuk endpoint LM Studio (port 1234); tidak ada yang diunduh. 109 tests.
 

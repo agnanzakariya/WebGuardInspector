@@ -20,7 +20,8 @@ public enum ComponentSource
 }
 
 /// <summary>A component as found on this PC (version and the executable Azura actually uses).</summary>
-public sealed record InstalledComponent(string Id, string Name, string? Version, string? ExecutablePath);
+/// <param name="Problem">Why the installed tool does not work (e.g. a missing DLL), when it is broken.</param>
+public sealed record InstalledComponent(string Id, string Name, string? Version, string? ExecutablePath, string? Problem = null);
 
 /// <summary>Installed and latest version of one component and how it would be updated.</summary>
 public sealed record ComponentState(
@@ -31,8 +32,12 @@ public sealed record ComponentState(
     string? ExecutablePath,
     ComponentSource Source,
     bool UpdateAvailable,
-    string? Note)
+    string? Note,
+    bool NeedsRepair = false)
 {
+    /// <summary>A broken installation that Azura can reinstall the way it was installed.</summary>
+    public bool CanRepair => NeedsRepair && Source is ComponentSource.Bundled or ComponentSource.Winget or ComponentSource.Pip;
+
     /// <summary>Update can be done from the app (not for manual installs or when the latest version is unknown).</summary>
     public bool CanUpdate => UpdateAvailable && Source is ComponentSource.Bundled or ComponentSource.Winget or ComponentSource.Pip
         or ComponentSource.ClaudeUpdater or ComponentSource.SignatureUpdater;
@@ -45,6 +50,10 @@ public interface IComponentUpdater
 
     /// <summary>Updates one component the way it was installed. Returns a short result text; throws when it failed.</summary>
     Task<string> UpdateAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken);
+
+    /// <summary>Reinstalls a broken component the way it was installed. Returns a short result text; throws when it failed.</summary>
+    Task<string> RepairAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException($"{component?.Name} cannot be repaired from Azura.");
 }
 
 /// <summary>State of a signature database (ClamAV): what is on disk and whether it is due for an update.</summary>

@@ -103,6 +103,18 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
             ComponentSource.Manual when newer => "Installed outside Azura's known locations; update it the way you installed it.",
             _ => null,
         };
+        if (component.Problem is { } problem && source is not (ComponentSource.Missing or ComponentSource.Manual))
+        {
+            var how = source switch
+            {
+                ComponentSource.Winget => "Repair reinstalls it with winget (Windows may ask for administrator permission).",
+                ComponentSource.Pip => "Repair reinstalls it with pip.",
+                ComponentSource.Bundled => "Repair downloads it again from its official GitHub release (SHA-256 checked).",
+                _ => "Reinstall it the way you installed it.",
+            };
+            return new ComponentState(component.Id, component.Name, component.Version, latest, component.ExecutablePath, source, false,
+                problem + " " + how, NeedsRepair: true);
+        }
         return new ComponentState(component.Id, component.Name, component.Version, latest, component.ExecutablePath, source, newer, note);
     }
 
@@ -147,6 +159,46 @@ public sealed partial class ComponentUpdateService(HttpClient http, IExternalPro
             ComponentSource.ClaudeUpdater => await UpdateClaudeAsync(component, progress, cancellationToken).ConfigureAwait(false),
             _ => throw new InvalidOperationException($"{component.Name} was not installed by a method Azura can update."),
         };
+    }
+
+    /// <summary>
+    /// Reinstalls a broken component the way it was installed: "winget install --force", "pip install --force-reinstall",
+    /// or the bundled tool downloaded again from its GitHub release with the SHA-256 checked.
+    /// </summary>
+    public async Task<string> RepairAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        var spec = Specs.FirstOrDefault(s => s.Id == component.Id) ?? throw new InvalidOperationException($"{component.Name} cannot be repaired from Azura.");
+        switch (component.Source)
+        {
+            case ComponentSource.Bundled:
+                await UpdateBundledAsync(spec, component, progress, cancellationToken).ConfigureAwait(false);
+                return $"{component.Name} was downloaded again and replaced.";
+            case ComponentSource.Winget when spec.WingetId is not null:
+            {
+                var winget = locateWinget() ?? throw new InvalidOperationException("winget was not found. Install \"App Installer\" from the Microsoft Store.");
+                progress?.Report($"Reinstalling {component.Name} with winget… Windows may ask for administrator permission.");
+                var result = await RunAsync(winget, ["install", "--id", spec.WingetId, "--exact", "--force", "--silent", "--accept-package-agreements",
+                    "--accept-source-agreements", "--disable-interactivity"], Path.GetTempPath(), cancellationToken).ConfigureAwait(false);
+                if (result.ExitCode != 0)
+                    throw new InvalidOperationException($"winget could not reinstall {component.Name} (exit code {result.ExitCode}): {LastLine(result.StandardOutput + result.StandardError)}");
+                return $"{component.Name} was reinstalled with winget.";
+            }
+            case ComponentSource.Pip when spec.PyPiPackage is not null:
+            {
+                var (python, prefix, user) = FindPythonFor(component.ExecutablePath!)
+                                             ?? throw new InvalidOperationException($"The Python that owns {component.Name} was not found; run \"python -m pip install --force-reinstall {spec.PyPiPackage}\" yourself.");
+                progress?.Report($"Reinstalling {spec.PyPiPackage} with pip…");
+                string[] args = [.. prefix, "-m", "pip", "install", .. (user ? new[] { "--user" } : []), "--force-reinstall", "--no-deps",
+                    "--disable-pip-version-check", spec.PyPiPackage];
+                var result = await RunAsync(python, args, Path.GetTempPath(), cancellationToken).ConfigureAwait(false);
+                if (result.ExitCode != 0)
+                    throw new InvalidOperationException($"pip could not reinstall {component.Name} (exit code {result.ExitCode}): {LastLine(result.StandardError.Length > 0 ? result.StandardError : result.StandardOutput)}");
+                return $"{component.Name} was reinstalled with pip.";
+            }
+            default:
+                throw new InvalidOperationException($"{component.Name} was not installed by a method Azura can repair; reinstall it by hand.");
+        }
     }
 
     // ---- Bundled exe ---------------------------------------------------------------------------------------------

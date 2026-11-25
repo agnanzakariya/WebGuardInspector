@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using WebGuard.Core.Detection;
 using WebGuard.Core.Updates;
+using WebGuard.Detection;
 using WebGuard.Intelligence;
 using WebGuard.Presentation.ViewModels;
 
@@ -159,6 +160,82 @@ public static class ComponentUpdateTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(respond(request));
+    }
+
+    [Test]
+    public static async Task Broken_installations_are_recognised_and_repaired_the_way_they_were_installed()
+    {
+        using var temp = new TempFolder();
+        var exe = temp.Write("yr.exe", "x");
+        var dllMissing = new FakeProcessRunner(_ => FakeProcessRunner.Ok("", unchecked((int)0xC0000135)));
+        var status = await new YaraXEngine(dllMissing, id => new ExternalToolOptions(id, exe, true, [temp.Path])).GetStatusAsync(CancellationToken.None);
+        Assert.True(BrokenInstall.IsBroken(status) && status.Message.Contains("0xC0000135", StringComparison.Ordinal) && status.ExecutablePath == exe,
+            "a missing DLL is reported as a broken installation: " + status.Message);
+
+        var winget = temp.Write("winget.exe", "x");
+        var osv = temp.Write(@"Microsoft\WinGet\Packages\Google.OSVScanner_x\osv-scanner.exe", "x");
+        var python = temp.Write(@"Python313\python.exe", "x");
+        var semgrep = temp.Write(@"Python313\Scripts\semgrep.exe", "x");
+        var runner = new FakeProcessRunner(_ => FakeProcessRunner.Ok("Successfully installed"));
+        var service = new ComponentUpdateService(new HttpClient(new Handler(Latest)), runner, Path.Combine(temp.Path, "tools"), () => winget);
+        var states = await service.CheckAsync(
+        [
+            new("osv-scanner", "OSV-Scanner", null, osv, BrokenInstall.Describe(osv, unchecked((int)0xC0000135))),
+            new("semgrep", "Semgrep CE", null, semgrep, BrokenInstall.Describe(semgrep, unchecked((int)0xC0000135))),
+            new("gitleaks", "Gitleaks", "8.31.0", temp.Write(@"elsewhere\gitleaks.exe", "x"), "Installation is incomplete: x"),
+        ], CancellationToken.None);
+        var byId = states.ToDictionary(x => x.Id);
+        Assert.True(byId["osv-scanner"] is { NeedsRepair: true, CanRepair: true, UpdateAvailable: false } o && o.Note!.Contains("winget", StringComparison.Ordinal),
+            "winget install can be repaired");
+        Assert.True(byId["gitleaks"] is { NeedsRepair: false, Source: ComponentSource.Manual }, "a manual install is not offered a repair");
+
+        await service.RepairAsync(byId["osv-scanner"], null, CancellationToken.None);
+        Assert.True(runner.Requests[^1] is { ExecutablePath: var w, Arguments: ["install", "--id", "Google.OSVScanner", "--exact", "--force", ..] } && w == winget,
+            "winget install --force");
+        await service.RepairAsync(byId["semgrep"], null, CancellationToken.None);
+        Assert.True(runner.Requests[^1].ExecutablePath == python && runner.Requests[^1].Arguments.SequenceEqual(
+            ["-m", "pip", "install", "--force-reinstall", "--no-deps", "--disable-pip-version-check", "semgrep"]), "pip --force-reinstall");
+    }
+
+    [Test]
+    public static async Task Components_page_shows_broken_engines_with_a_repair_button()
+    {
+        using var temp = new TempFolder();
+        var exe = temp.Write("yr.exe", "x");
+        var engine = new YaraXEngine(new FakeProcessRunner(_ => FakeProcessRunner.Ok("", unchecked((int)0xC0000135))),
+            id => new ExternalToolOptions(id, exe, true, [temp.Path]));
+        var updater = new RepairingUpdater();
+        var dialogs = new FakeDialogs();
+        var page = new ComponentsViewModel([engine], new EngineCatalogViewModel([engine]), updater, null, dialogs);
+
+        await page.CheckAsync();
+        var row = page.Rows.Single();
+        Assert.True(row is { StatusText: "Needs repair", Tone: StatusTone.Danger } && row.RepairCommand.CanExecute(null) && page.NeedsRepair == 1,
+            "broken engine listed with Repair");
+        Assert.True(updater.Seen.Single().Problem!.StartsWith(BrokenInstall.Marker, StringComparison.Ordinal), "the problem reaches the updater");
+        await row.RepairCommand.ExecuteAsync();
+        Assert.True(updater.Repaired == 1 && row.Message.Contains("reinstalled", StringComparison.Ordinal), "repair runs: " + row.Message);
+    }
+
+    private sealed class RepairingUpdater : IComponentUpdater
+    {
+        public List<InstalledComponent> Seen { get; } = [];
+        public int Repaired { get; private set; }
+
+        public Task<IReadOnlyList<ComponentState>> CheckAsync(IReadOnlyList<InstalledComponent> installed, CancellationToken cancellationToken)
+        {
+            Seen.AddRange(installed);
+            return Task.FromResult<IReadOnlyList<ComponentState>>(installed.Select(c => new ComponentState(c.Id, c.Name, c.Version, "1.0.0", c.ExecutablePath,
+                ComponentSource.Winget, false, c.Problem, NeedsRepair: c.Problem is not null && Repaired == 0)).ToArray());
+        }
+
+        public Task<string> UpdateAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken) => Task.FromResult("ok");
+
+        public Task<string> RepairAsync(ComponentState component, IProgress<string>? progress, CancellationToken cancellationToken)
+        {
+            Repaired++;
+            return Task.FromResult(component.Name + " was reinstalled with winget.");
+        }
     }
 
     private sealed class StubUpdater : IComponentUpdater

@@ -15,11 +15,15 @@ public sealed class ComponentRowViewModel : ObservableObject
     private bool _isUpdating;
     private string _message = string.Empty;
 
-    public ComponentRowViewModel(ComponentState state, Func<ComponentRowViewModel, Task> update)
+    public ComponentRowViewModel(ComponentState state, Func<ComponentRowViewModel, Task> update, Func<ComponentRowViewModel, Task>? repair = null)
     {
         _state = state;
         UpdateCommand = new AsyncRelayCommand(() => update(this), () => State.CanUpdate && !IsUpdating);
+        RepairCommand = new AsyncRelayCommand(() => repair?.Invoke(this) ?? Task.CompletedTask, () => repair is not null && State.CanRepair && !IsUpdating);
     }
+
+    /// <summary>Reinstalls a broken component (e.g. a missing DLL).</summary>
+    public AsyncRelayCommand RepairCommand { get; }
 
     public ComponentState State
     {
@@ -31,6 +35,7 @@ public sealed class ComponentRowViewModel : ObservableObject
                          nameof(Tone), nameof(Note), nameof(HasNote) })
                 OnPropertyChanged(n);
             UpdateCommand.RaiseCanExecuteChanged();
+            RepairCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -57,6 +62,7 @@ public sealed class ComponentRowViewModel : ObservableObject
 
     public string StatusText => State switch
     {
+        { NeedsRepair: true } => "Needs repair",
         { Source: ComponentSource.Missing } => "Not installed",
         { Source: ComponentSource.SignatureUpdater, InstalledVersion: null } => "Not downloaded",
         { UpdateAvailable: true } => "Update available",
@@ -67,6 +73,7 @@ public sealed class ComponentRowViewModel : ObservableObject
 
     public StatusTone Tone => State switch
     {
+        { NeedsRepair: true } => StatusTone.Danger,
         { Source: ComponentSource.Missing } => StatusTone.Warning,
         { UpdateAvailable: true } => StatusTone.Info,
         { LatestVersion: null } => StatusTone.Neutral,
@@ -76,7 +83,12 @@ public sealed class ComponentRowViewModel : ObservableObject
     public bool IsUpdating
     {
         get => _isUpdating;
-        set { if (SetProperty(ref _isUpdating, value)) UpdateCommand.RaiseCanExecuteChanged(); }
+        set
+        {
+            if (!SetProperty(ref _isUpdating, value)) return;
+            UpdateCommand.RaiseCanExecuteChanged();
+            RepairCommand.RaiseCanExecuteChanged();
+        }
     }
 
     public string Message { get => _message; set => SetProperty(ref _message, value); }
@@ -115,6 +127,9 @@ public sealed class ComponentsViewModel : ObservableObject
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
     public int UpdatesAvailable => Rows.Count(r => r.State.UpdateAvailable);
 
+    /// <summary>Components whose installation is broken.</summary>
+    public int NeedsRepair => Rows.Count(r => r.State.NeedsRepair);
+
     public bool IsBusy
     {
         get => _isBusy;
@@ -137,11 +152,14 @@ public sealed class ComponentsViewModel : ObservableObject
             var installed = await FindInstalledAsync(cancellationToken).ConfigureAwait(true);
             var states = await _updater.CheckAsync(installed, cancellationToken).ConfigureAwait(true);
             Rows.Clear();
-            foreach (var s in states) Rows.Add(new ComponentRowViewModel(s, UpdateRowAsync));
+            foreach (var s in states) Rows.Add(new ComponentRowViewModel(s, UpdateRowAsync, RepairRowAsync));
             var updates = states.Where(s => s.UpdateAvailable).ToArray();
-            Status = updates.Length == 0
-                ? "All components are up to date."
-                : $"{updates.Length} update(s) available: " + string.Join(", ", updates.Select(u => $"{u.Name} {u.InstalledVersion} → {u.LatestVersion}"));
+            var broken = states.Where(s => s.NeedsRepair).ToArray();
+            Status = (broken.Length > 0 ? $"{broken.Length} component(s) need repair: {string.Join(", ", broken.Select(b => b.Name))}. " : string.Empty) +
+                     (updates.Length == 0
+                         ? (broken.Length == 0 ? "All components are up to date." : "No updates.")
+                         : $"{updates.Length} update(s) available: " + string.Join(", ", updates.Select(u => $"{u.Name} {u.InstalledVersion} → {u.LatestVersion}")));
+            OnPropertyChanged(nameof(NeedsRepair));
             OnPropertyChanged(nameof(UpdatesAvailable));
             return updates;
         }
@@ -163,10 +181,13 @@ public sealed class ComponentsViewModel : ObservableObject
         foreach (var row in Rows.Where(r => r.State is { Source: ComponentSource.SignatureUpdater, UpdateAvailable: true, InstalledVersion: not null }).ToArray())
             await UpdateRowAsync(row).ConfigureAwait(true);
         updates = Rows.Where(r => r.State.UpdateAvailable).Select(r => r.State).ToArray();
-        if (updates.Count == 0 || _dialogs is null) return false;
-        var list = string.Join("\n", updates.Select(u => $"•  {u.Name}: {u.InstalledVersion} → {u.LatestVersion}"));
-        return _dialogs.Confirm("Component updates available",
-            $"Newer versions are available:\n\n{list}\n\nOpen Settings → Components to update them now?");
+        var broken = Rows.Where(r => r.State.NeedsRepair).Select(r => r.State).ToArray();
+        if (updates.Count + broken.Length == 0 || _dialogs is null) return false;
+        var lines = broken.Select(b => $"•  {b.Name}: installation is broken (needs repair)")
+            .Concat(updates.Select(u => $"•  {u.Name}: {u.InstalledVersion} → {u.LatestVersion}"));
+        return _dialogs.Confirm(broken.Length > 0 ? "Components need attention" : "Component updates available",
+            $"{(broken.Length > 0 ? "Some components need repair or an update" : "Newer versions are available")}:\n\n{string.Join("\n", lines)}\n\n" +
+            "Open Settings → Components to fix them now?");
     }
 
     private async Task<List<InstalledComponent>> FindInstalledAsync(CancellationToken cancellationToken)
@@ -175,7 +196,8 @@ public sealed class ComponentsViewModel : ObservableObject
         foreach (var engine in _engines.Where(e => e.Info.Id is not ("malware-hash" or "second-brain")))
         {
             var status = await engine.GetStatusAsync(cancellationToken).ConfigureAwait(true);
-            list.Add(new InstalledComponent(engine.Info.Id, engine.Info.DisplayName, status.Version, Existing(status.ExecutablePath)));
+            list.Add(new InstalledComponent(engine.Info.Id, engine.Info.DisplayName, status.Version, Existing(status.ExecutablePath),
+                BrokenInstall.IsBroken(status) ? status.Message : null));
         }
         if (_fixer is not null)
         {
@@ -211,6 +233,37 @@ public sealed class ComponentsViewModel : ObservableObject
         {
             row.IsUpdating = false;
             IsBusy = false;
+            OnPropertyChanged(nameof(UpdatesAvailable));
+            UpdateAllCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    /// <summary>Reinstalls a broken component, then reads its state again from the tool itself.</summary>
+    private async Task RepairRowAsync(ComponentRowViewModel row)
+    {
+        if (_updater is null) return;
+        row.IsUpdating = true;
+        IsBusy = true;
+        try
+        {
+            var progress = new Progress<string>(m => row.Message = m);
+            row.Message = await _updater.RepairAsync(row.State, progress, CancellationToken.None).ConfigureAwait(true);
+            await _catalog.RefreshAsync().ConfigureAwait(true);
+            var installed = (await FindInstalledAsync(CancellationToken.None).ConfigureAwait(true)).FirstOrDefault(c => c.Id == row.State.Id);
+            var fresh = (await _updater.CheckAsync(installed is null ? [] : [installed], CancellationToken.None).ConfigureAwait(true))
+                .FirstOrDefault(s => s.Id == row.State.Id);
+            if (fresh is not null) row.State = fresh;
+            if (fresh is { NeedsRepair: true }) row.Message += " It still does not start; reinstall it by hand.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or HttpRequestException or UnauthorizedAccessException)
+        {
+            row.Message = ex.Message;
+        }
+        finally
+        {
+            row.IsUpdating = false;
+            IsBusy = false;
+            OnPropertyChanged(nameof(NeedsRepair));
             OnPropertyChanged(nameof(UpdatesAvailable));
             UpdateAllCommand.RaiseCanExecuteChanged();
         }
