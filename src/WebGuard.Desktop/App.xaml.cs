@@ -145,7 +145,8 @@ public partial class App : Application
             catalog,
             settings,
             theme,
-            setup);
+            setup,
+            new LmStudioLauncher(processRunner));
     }
 
     /// <summary>clamscan.exe from Settings, else the installed one (freshclam.exe lives next to it).</summary>

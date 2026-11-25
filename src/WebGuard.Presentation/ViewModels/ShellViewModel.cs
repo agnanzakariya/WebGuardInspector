@@ -52,8 +52,11 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         EngineCatalogViewModel engines,
         SettingsService settings,
         IThemeService theme,
-        SetupWizardViewModel? setup = null)
+        SetupWizardViewModel? setup = null,
+        Core.AI.ILocalAiLauncher? localAi = null)
     {
+        _localAi = localAi;
+        StartLocalAiCommand = new AsyncRelayCommand(() => StartLocalAiAsync(manual: true), () => CanStartLocalAi);
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(settingsPage);
         Workspace = workspace;
@@ -89,6 +92,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         };
         settingsPage.Saved += async (_, _) =>
         {
+            OnPropertyChanged(nameof(CanStartLocalAi));
+            StartLocalAiCommand.RaiseCanExecuteChanged();
             scanner.RefreshPolicy();
             // Intelligence statuses are instant; engine statuses run a version probe per CLI tool, so they go last.
             await intelligence.RefreshAsync().ConfigureAwait(true);
@@ -151,6 +156,65 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     public bool IsDarkTheme => _theme.Current == AppTheme.Dark;
     public string EngineStateText => Workspace.IsScanning ? "Scanning…" : "Ready";
 
+    private readonly Core.AI.ILocalAiLauncher? _localAi;
+    private string _localAiStatusText = string.Empty;
+    private bool _isStartingLocalAi;
+
+    /// <summary>Starts LM Studio and loads the model on request (the sidebar's "Start local AI").</summary>
+    public AsyncRelayCommand StartLocalAiCommand { get; }
+
+    /// <summary>What the local AI start did, shown in the sidebar status card; empty when nothing was attempted.</summary>
+    public string LocalAiStatusText
+    {
+        get => _localAiStatusText;
+        private set { if (SetProperty(ref _localAiStatusText, value)) OnPropertyChanged(nameof(HasLocalAiStatus)); }
+    }
+
+    public bool HasLocalAiStatus => LocalAiStatusText.Length > 0;
+
+    public bool IsStartingLocalAi
+    {
+        get => _isStartingLocalAi;
+        private set
+        {
+            if (!SetProperty(ref _isStartingLocalAi, value)) return;
+            OnPropertyChanged(nameof(CanStartLocalAi));
+            StartLocalAiCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    /// <summary>LM Studio's CLI is installed, AI analysis is on and the endpoint is LM Studio's.</summary>
+    public bool CanStartLocalAi => _localAi is { IsAvailable: true } && _settings.Current is { AiEnabled: true, UsesLmStudio: true } && !IsStartingLocalAi;
+
+    /// <summary>
+    /// Starts LM Studio's server and loads the model in the background, then refreshes the AI Analyst and Fixing statuses.
+    /// At launch only when enabled in Settings and the first-run setup is done; never blocks the window.
+    /// </summary>
+    internal async Task StartLocalAiAsync(bool manual)
+    {
+        var s = _settings.Current;
+        if (!CanStartLocalAi || (!manual && (!s.LocalAiAutoStart || IsSetupRequired))) return;
+        IsStartingLocalAi = true;
+        LocalAiStatusText = "Starting local AI…";
+        var progress = new Progress<string>(m => LocalAiStatusText = m);
+        try
+        {
+            var options = new Core.AI.LocalAiStartup(s.AiModel, s.LocalAiGpuOffload, s.LocalAiContextLength);
+            var result = await Task.Run(() => _localAi!.EnsureRunningAsync(options, progress, CancellationToken.None)).ConfigureAwait(true);
+            LocalAiStatusText = result.Message;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            LocalAiStatusText = "Local AI did not start: " + ex.Message;
+        }
+        finally
+        {
+            IsStartingLocalAi = false;
+        }
+        await Page<AiAnalystViewModel>().RefreshAsync().ConfigureAwait(true);
+        await Page<FixingViewModel>().RefreshAsync().ConfigureAwait(true);
+    }
+
     public NavItemViewModel? SelectedNav
     {
         get => _selectedNav;
@@ -175,6 +239,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     {
         _theme.Apply(_settings.Current.Theme);
         OnPropertyChanged(nameof(IsDarkTheme));
+        // In the background: loading a large model takes minutes and must not hold up the window.
+        _ = StartLocalAiAsync(manual: false);
         // Started together: engine statuses probe each CLI tool's version and must not hold up the others.
         await Task.WhenAll(
             Engines.RefreshAsync(),

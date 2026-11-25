@@ -39,6 +39,19 @@ public sealed record AppSettings
 
     public const string DefaultAiEndpoint = "http://127.0.0.1:1234/v1";
 
+    /// <summary>When Azura opens, start LM Studio's server and load the model (only for an LM Studio endpoint, port 1234).</summary>
+    public bool LocalAiAutoStart { get; init; } = true;
+
+    /// <summary>GPU share for loading the model: "auto", "off", "max" or a number from 0 to 1 (e.g. 0.75).</summary>
+    public string LocalAiGpuOffload { get; init; } = Core.AI.LocalAiStartup.AutoGpu;
+
+    /// <summary>Context window used when Azura loads the model.</summary>
+    public int LocalAiContextLength { get; init; } = Core.AI.LocalAiStartup.DefaultContextLength;
+
+    /// <summary>LM Studio serves on port 1234; other servers (Ollama) are not started by Azura.</summary>
+    [JsonIgnore]
+    public bool UsesLmStudio => Uri.TryCreate(AiEndpoint, UriKind.Absolute, out var uri) && uri.IsLoopback && uri.Port == 1234;
+
     /// <summary>Obsidian vault used as the Second Brain; empty disables recording.</summary>
     public string? SecondBrainVaultPath { get; init; }
 

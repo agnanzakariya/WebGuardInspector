@@ -709,6 +709,9 @@ public sealed class SettingsViewModel : PageViewModel
     private bool _aiEnabled;
     private string _aiEndpoint = string.Empty;
     private string _aiModel = string.Empty;
+    private bool _localAiAutoStart;
+    private string _localAiGpuOffload = Core.AI.LocalAiStartup.AutoGpu;
+    private string _localAiContextText = string.Empty;
     private string _vaultPath = string.Empty;
     private bool _autoRecord;
     private bool _secondBrainFirst;
@@ -791,6 +794,9 @@ public sealed class SettingsViewModel : PageViewModel
     public bool AiEnabled { get => _aiEnabled; set => SetProperty(ref _aiEnabled, value); }
     public string AiEndpoint { get => _aiEndpoint; set => SetProperty(ref _aiEndpoint, value?.Trim() ?? string.Empty); }
     public string AiModel { get => _aiModel; set => SetProperty(ref _aiModel, value?.Trim() ?? string.Empty); }
+    public bool LocalAiAutoStart { get => _localAiAutoStart; set => SetProperty(ref _localAiAutoStart, value); }
+    public string LocalAiGpuOffload { get => _localAiGpuOffload; set => SetProperty(ref _localAiGpuOffload, value?.Trim() ?? string.Empty); }
+    public string LocalAiContextText { get => _localAiContextText; set => SetProperty(ref _localAiContextText, value?.Trim() ?? string.Empty); }
     public string VaultPath { get => _vaultPath; set => SetProperty(ref _vaultPath, value?.Trim().Trim('"') ?? string.Empty); }
     public bool AutoRecord { get => _autoRecord; set => SetProperty(ref _autoRecord, value); }
     public bool SecondBrainFirst { get => _secondBrainFirst; set => SetProperty(ref _secondBrainFirst, value); }
@@ -851,6 +857,17 @@ public sealed class SettingsViewModel : PageViewModel
             return;
         }
 
+        if (!Core.AI.LocalAiStartup.IsValidGpuOffload(LocalAiGpuOffload))
+        {
+            SaveMessage = "GPU offload must be auto, off, max or a number from 0 to 1 (e.g. 0.75).";
+            return;
+        }
+        if (!int.TryParse(LocalAiContextText, NumberStyles.Integer, CultureInfo.CurrentCulture, out var context) || context is < 512 or > 262_144)
+        {
+            SaveMessage = "Context length must be a whole number between 512 and 262144 tokens.";
+            return;
+        }
+
         if (VaultPath.Length > 0 && !Directory.Exists(VaultPath))
         {
             SaveMessage = "Second Brain vault folder not found. Create it (or open it in Obsidian) first.";
@@ -885,6 +902,9 @@ public sealed class SettingsViewModel : PageViewModel
             AiEnabled = AiEnabled,
             AiEndpoint = AiEndpoint,
             AiModel = AiModel.Length == 0 ? null : AiModel,
+            LocalAiAutoStart = LocalAiAutoStart,
+            LocalAiGpuOffload = LocalAiGpuOffload.ToLowerInvariant(),
+            LocalAiContextLength = context,
             SecondBrainVaultPath = VaultPath.Length == 0 ? null : VaultPath,
             SecondBrainAutoRecord = AutoRecord,
             SecondBrainFirst = SecondBrainFirst,
@@ -912,6 +932,9 @@ public sealed class SettingsViewModel : PageViewModel
         AiEnabled = defaults.AiEnabled;
         AiEndpoint = defaults.AiEndpoint;
         AiModel = string.Empty;
+        LocalAiAutoStart = defaults.LocalAiAutoStart;
+        LocalAiGpuOffload = defaults.LocalAiGpuOffload;
+        LocalAiContextText = defaults.LocalAiContextLength.ToString(CultureInfo.CurrentCulture);
         AutoRecord = defaults.SecondBrainAutoRecord;
         SecondBrainFirst = defaults.SecondBrainFirst;
         ReuseUnchanged = defaults.ReuseUnchangedScanResults;
@@ -937,6 +960,9 @@ public sealed class SettingsViewModel : PageViewModel
         AiEnabled = s.AiEnabled;
         AiEndpoint = s.AiEndpoint;
         AiModel = s.AiModel ?? string.Empty;
+        LocalAiAutoStart = s.LocalAiAutoStart;
+        LocalAiGpuOffload = s.LocalAiGpuOffload;
+        LocalAiContextText = s.LocalAiContextLength.ToString(CultureInfo.CurrentCulture);
         VaultPath = s.SecondBrainVaultPath ?? string.Empty;
         AutoRecord = s.SecondBrainAutoRecord;
         SecondBrainFirst = s.SecondBrainFirst;

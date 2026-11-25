@@ -1,4 +1,4 @@
-# Azura — WebGuard Inspector v1.1.2
+# Azura — WebGuard Inspector v1.2.0
 
 **Homepage:** <https://agnanzakariya.github.io/WebGuardInspector/> · **Unduh:** [rilis terbaru](https://github.com/agnanzakariya/WebGuardInspector/releases/latest)
 
@@ -381,6 +381,8 @@ masing-masing: Gitleaks (MIT), OSV-Scanner (Apache-2.0) dan YARA-X (BSD-3-Clause
 ClamAV (GPL-2.0), Semgrep, Claude Code, Obsidian dan LM Studio tidak dibundel; dipasang terpisah sesuai lisensinya.
 
 ## Changelog
+
+**1.2.0** — AI lokal ikut dinyalakan saat Azura dibuka: lewat `lms` (CLI LM Studio) Azura menyalakan server lokal dan memuat model AI Analyst (atau model chat pertama yang sudah diunduh) bila belum ada yang termuat, di background tanpa menahan jendela. Pengaturan baru di *Settings → AI Analyst*: nyalakan otomatis, GPU offload (`auto`, `off`, `max` atau 0–1, mis. `0.75` untuk GPU terintegrasi) dan panjang konteks. Status dan tombol *Start local AI* di panel kiri bawah. Hanya untuk endpoint LM Studio (port 1234); tidak ada yang diunduh. 109 tests.
 
 **1.1.2** — Batas waktu AI lokal diperpanjang untuk model besar di CPU (mis. Qwen 27B, sekitar 1 token/detik): AI Analyst 30 menit (sebelumnya 5), Fixing dengan model lokal 60 menit (sebelumnya 10). Batas waktu yang habis kini dilaporkan sebagai "model tidak menjawab dalam N menit" (sebelumnya terbaca "canceled"), dan pesan progres menjelaskan lamanya.
 

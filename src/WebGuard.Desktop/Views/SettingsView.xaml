@@ -58,6 +58,29 @@
             <TextBlock Text="Model (empty = first loaded chat model)" Style="{StaticResource Text.Secondary}" Margin="0,12,0,6"/>
             <TextBox Text="{Binding AiModel, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
                      Tag="auto" AutomationProperties.Name="AI model"/>
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding LocalAiAutoStart, Mode=TwoWay}" Margin="0,14,0,0"
+                      Content="Start LM Studio and load the model when Azura opens"/>
+            <TextBlock Style="{StaticResource Text.Wrap}" FontSize="12" Margin="50,6,0,0"
+                       Text="Uses LM Studio's lms tool: starts the local server and loads the model above (or the first downloaded chat model) unless one is already loaded. Only for the LM Studio endpoint (port 1234); nothing is downloaded."/>
+            <Grid Margin="0,10,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Text="GPU offload (auto, off, max or 0–1)" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+                <TextBox Text="{Binding LocalAiGpuOffload, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
+                         Tag="auto" AutomationProperties.Name="GPU offload"/>
+              </StackPanel>
+              <StackPanel Grid.Column="2">
+                <TextBlock Text="Context length (tokens)" Style="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+                <TextBox Text="{Binding LocalAiContextText, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Font.Code}"
+                         Tag="8192" AutomationProperties.Name="Context length"/>
+              </StackPanel>
+            </Grid>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="Laptops with an integrated GPU (e.g. Intel Iris Xe) often answer faster with part of the model on the GPU, such as 0.75; a value that is too high fails to load."/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="0,12,0,0">

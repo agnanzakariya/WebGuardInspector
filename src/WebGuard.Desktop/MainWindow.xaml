@@ -70,6 +70,13 @@
             </StackPanel>
             <TextBlock Text="Local analysis engine" Style="{StaticResource Text.Caption}" Margin="17,2,0,0"/>
             <TextBlock Text="{Binding VersionText}" Style="{StaticResource Text.Caption}" Foreground="{DynamicResource Brush.TextMuted}" Margin="17,0,0,0"/>
+            <TextBlock Text="{Binding LocalAiStatusText}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextTrimming="None" Margin="17,6,0,0"
+                       Visibility="{Binding HasLocalAiStatus, Converter={StaticResource BoolToVisibility}}"/>
+            <ProgressBar IsIndeterminate="True" Height="3" Margin="17,4,0,0"
+                         Visibility="{Binding IsStartingLocalAi, Converter={StaticResource BoolToVisibility}}"/>
+            <Button Style="{StaticResource Button.Link}" Content="Start local AI" Command="{Binding StartLocalAiCommand}" HorizontalAlignment="Left"
+                    Margin="17,4,0,0" ToolTip="Start LM Studio's server and load the model set in Settings → AI Analyst"
+                    Visibility="{Binding CanStartLocalAi, Converter={StaticResource BoolToVisibility}}"/>
           </StackPanel>
         </Border>
       </Grid>
